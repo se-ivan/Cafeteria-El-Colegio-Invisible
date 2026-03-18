@@ -5,6 +5,20 @@ import { auth } from "@/lib/auth"
 import { revalidatePath } from "next/cache"
 import type { PaymentMethod, SupplyStatus, CartItem, Supply } from "@/lib/types"
 import { sendInventoryAlert } from "@/lib/whatsapp"
+import { hash } from "bcryptjs"
+
+const WORKER_EMAIL_DOMAIN = "@elcolegioinvisible.com"
+
+async function ensureWhatsAppRecipientsTable() {
+  await sql(`
+    CREATE TABLE IF NOT EXISTS whatsapp_recipients (
+      id SERIAL PRIMARY KEY,
+      phone TEXT NOT NULL UNIQUE,
+      is_active BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `)
+}
 
 // Helper to calculate supply status
 function calculateStatus(currentStock: number, minStock: number): SupplyStatus {
@@ -29,77 +43,83 @@ export async function processSale(
 
   try {
     // Create the sale
-    const saleResult = await sql<{ id: number }[]>`
-      INSERT INTO sales (user_id, total, payment_method, notes)
-      VALUES (${userId}, ${total}, ${paymentMethod}, ${notes || null})
-      RETURNING id
-    `
+    const saleResult = await sql(
+      `INSERT INTO sales (user_id, total, payment_method, notes)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id`,
+      [userId, total, paymentMethod, notes || null]
+    ) as { id: number }[]
     const saleId = saleResult[0].id
 
     // Insert sale items
     for (const item of items) {
-      await sql`
-        INSERT INTO sale_items (sale_id, product_id, product_name, quantity, unit_price, subtotal)
-        VALUES (
-          ${saleId},
-          ${item.product.id},
-          ${item.product.name},
-          ${item.quantity},
-          ${item.product.price},
-          ${item.product.price * item.quantity}
-        )
-      `
+      await sql(
+        `INSERT INTO sale_items (sale_id, product_id, product_name, quantity, unit_price, subtotal)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [
+          saleId,
+          item.product.id,
+          item.product.name,
+          item.quantity,
+          item.product.price,
+          item.product.price * item.quantity
+        ]
+      )
 
       // Get recipe for this product and deduct from inventory
-      const recipeItems = await sql<{ supply_id: number; quantity: number }[]>`
-        SELECT supply_id, quantity FROM recipe_items WHERE product_id = ${item.product.id}
-      `
+      const recipeItems = await sql(
+        "SELECT supply_id, quantity FROM recipe_items WHERE product_id = $1",
+        [item.product.id]
+      ) as { supply_id: number; quantity: number }[]
 
       // Deduct supplies based on recipe
       for (const recipe of recipeItems) {
         const deduction = recipe.quantity * item.quantity
         
         // Update supply and recalculate status
-        await sql`
-          UPDATE supplies
-          SET 
-            current_stock = GREATEST(0, current_stock - ${deduction}),
-            status = CASE
-              WHEN current_stock - ${deduction} <= 0 THEN 'OUT'::supply_status
-              WHEN current_stock - ${deduction} <= min_stock THEN 'LOW'::supply_status
-              ELSE 'OK'::supply_status
-            END,
-            updated_at = NOW()
-          WHERE id = ${recipe.supply_id}
-        `
+        await sql(
+          `UPDATE supplies
+           SET 
+             current_stock = GREATEST(0, current_stock - $1),
+             status = CASE
+               WHEN current_stock - $1 <= 0 THEN 'OUT'::supply_status
+               WHEN current_stock - $1 <= min_stock THEN 'LOW'::supply_status
+               ELSE 'OK'::supply_status
+             END,
+             updated_at = NOW()
+           WHERE id = $2`,
+          [deduction, recipe.supply_id]
+        )
       }
     }
 
     // Check for low stock alerts
-    const lowStockSupplies = await sql<{ id: number; name: string; current_stock: number; status: string; last_alert_sent: Date | null }[]>`
+    const lowStockSupplies = await sql(`
       SELECT id, name, current_stock, status, last_alert_sent
       FROM supplies
       WHERE status IN ('LOW', 'OUT')
       AND (last_alert_sent IS NULL OR last_alert_sent < NOW() - INTERVAL '4 hours')
-    `
+    `) as { id: number; name: string; current_stock: number; status: string; last_alert_sent: Date | null }[]
 
     // If there are supplies that need alerts, trigger WhatsApp notification
     if (lowStockSupplies.length > 0) {
       // Update last_alert_sent for these supplies
       const supplyIds = lowStockSupplies.map(s => s.id)
-      await sql`
-        UPDATE supplies
-        SET last_alert_sent = NOW()
-        WHERE id = ANY(${supplyIds})
-      `
+      await sql(
+        `UPDATE supplies
+         SET last_alert_sent = NOW()
+         WHERE id = ANY($1)`,
+        [supplyIds]
+      )
 
       // Log the alert
       for (const supply of lowStockSupplies) {
         const message = `Alerta: ${supply.name} - Stock: ${supply.current_stock} (${supply.status})`
-        await sql`
-          INSERT INTO alert_logs (supply_id, message)
-          VALUES (${supply.id}, ${message})
-        `
+        await sql(
+          `INSERT INTO alert_logs (supply_id, message)
+           VALUES ($1, $2)`,
+          [supply.id, message]
+        )
       }
 
       // Send WhatsApp alert
@@ -121,7 +141,12 @@ export async function processSale(
     revalidatePath("/admin/inventory")
     revalidatePath("/admin/sales")
 
-    return { success: true, saleId }
+    return {
+      success: true,
+      saleId,
+      total,
+      lowStockCount: lowStockSupplies.length,
+    }
   } catch (error) {
     console.error("Error processing sale:", error)
     throw new Error("Error al procesar la venta")
@@ -136,9 +161,7 @@ export async function updateSupplyStock(supplyId: number, newStock: number) {
   }
 
   try {
-    const supply = await sql<{ min_stock: number }[]>`
-      SELECT min_stock FROM supplies WHERE id = ${supplyId}
-    `
+    const supply = await sql("SELECT min_stock FROM supplies WHERE id = $1", [supplyId]) as { min_stock: number }[]
     
     if (supply.length === 0) {
       throw new Error("Insumo no encontrado")
@@ -146,11 +169,12 @@ export async function updateSupplyStock(supplyId: number, newStock: number) {
 
     const status = calculateStatus(newStock, supply[0].min_stock)
 
-    await sql`
-      UPDATE supplies
-      SET current_stock = ${newStock}, status = ${status}, updated_at = NOW()
-      WHERE id = ${supplyId}
-    `
+    await sql(
+      `UPDATE supplies
+       SET current_stock = $1, status = $2, updated_at = NOW()
+       WHERE id = $3`,
+      [newStock, status, supplyId]
+    )
 
     revalidatePath("/admin/inventory")
     return { success: true }
@@ -168,9 +192,7 @@ export async function updateSupplyMinStock(supplyId: number, newMinStock: number
   }
 
   try {
-    const supply = await sql<{ current_stock: number }[]>`
-      SELECT current_stock FROM supplies WHERE id = ${supplyId}
-    `
+    const supply = await sql("SELECT current_stock FROM supplies WHERE id = $1", [supplyId]) as { current_stock: number }[]
     
     if (supply.length === 0) {
       throw new Error("Insumo no encontrado")
@@ -178,11 +200,12 @@ export async function updateSupplyMinStock(supplyId: number, newMinStock: number
 
     const status = calculateStatus(supply[0].current_stock, newMinStock)
 
-    await sql`
-      UPDATE supplies
-      SET min_stock = ${newMinStock}, status = ${status}, updated_at = NOW()
-      WHERE id = ${supplyId}
-    `
+    await sql(
+      `UPDATE supplies
+       SET min_stock = $1, status = $2, updated_at = NOW()
+       WHERE id = $3`,
+      [newMinStock, status, supplyId]
+    )
 
     revalidatePath("/admin/inventory")
     return { success: true }
@@ -207,10 +230,11 @@ export async function createSupply(data: {
   const status = calculateStatus(data.currentStock, data.minStock)
 
   try {
-    await sql`
-      INSERT INTO supplies (name, unit, current_stock, min_stock, status)
-      VALUES (${data.name}, ${data.unit}, ${data.currentStock}, ${data.minStock}, ${status})
-    `
+    await sql(
+      `INSERT INTO supplies (name, unit, current_stock, min_stock, status)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [data.name, data.unit, data.currentStock, data.minStock, status]
+    )
 
     revalidatePath("/admin/inventory")
     return { success: true }
@@ -228,7 +252,7 @@ export async function deleteSupply(supplyId: number) {
   }
 
   try {
-    await sql`DELETE FROM supplies WHERE id = ${supplyId}`
+    await sql("DELETE FROM supplies WHERE id = $1", [supplyId])
     revalidatePath("/admin/inventory")
     return { success: true }
   } catch (error) {
@@ -250,11 +274,12 @@ export async function updateProduct(productId: number, data: {
   }
 
   try {
-    await sql`
-      UPDATE products
-      SET name = ${data.name}, price = ${data.price}, category_id = ${data.categoryId}, is_active = ${data.isActive}, updated_at = NOW()
-      WHERE id = ${productId}
-    `
+    await sql(
+      `UPDATE products
+       SET name = $1, price = $2, category_id = $3, is_active = $4, updated_at = NOW()
+       WHERE id = $5`,
+      [data.name, data.price, data.categoryId, data.isActive, productId]
+    )
 
     revalidatePath("/admin/products")
     revalidatePath("/pos")
@@ -277,10 +302,11 @@ export async function createProduct(data: {
   }
 
   try {
-    await sql`
-      INSERT INTO products (name, price, category_id)
-      VALUES (${data.name}, ${data.price}, ${data.categoryId})
-    `
+    await sql(
+      `INSERT INTO products (name, price, category_id)
+       VALUES ($1, $2, $3)`,
+      [data.name, data.price, data.categoryId]
+    )
 
     revalidatePath("/admin/products")
     revalidatePath("/pos")
@@ -300,14 +326,15 @@ export async function updateRecipe(productId: number, items: { supplyId: number;
 
   try {
     // Delete existing recipe items
-    await sql`DELETE FROM recipe_items WHERE product_id = ${productId}`
+    await sql("DELETE FROM recipe_items WHERE product_id = $1", [productId])
 
     // Insert new recipe items
     for (const item of items) {
-      await sql`
-        INSERT INTO recipe_items (product_id, supply_id, quantity)
-        VALUES (${productId}, ${item.supplyId}, ${item.quantity})
-      `
+      await sql(
+        `INSERT INTO recipe_items (product_id, supply_id, quantity)
+         VALUES ($1, $2, $3)`,
+        [productId, item.supplyId, item.quantity]
+      )
     }
 
     revalidatePath("/admin/products")
@@ -315,5 +342,115 @@ export async function updateRecipe(productId: number, items: { supplyId: number;
   } catch (error) {
     console.error("Error updating recipe:", error)
     throw new Error("Error al actualizar receta")
+  }
+}
+
+// Settings - Workers
+export async function createWorker(data: {
+  name: string
+  emailLocalPart: string
+  password: string
+  role: "ADMIN" | "CASHIER"
+}) {
+  const session = await auth()
+  if (!session?.user || session.user.role !== "ADMIN") {
+    throw new Error("No autorizado")
+  }
+
+  const localPart = data.emailLocalPart.trim().toLowerCase().split("@")[0]
+  if (!localPart) {
+    throw new Error("El usuario del correo es obligatorio")
+  }
+
+  if (data.password.trim().length < 6) {
+    throw new Error("La contrasena debe tener al menos 6 caracteres")
+  }
+
+  const email = `${localPart}${WORKER_EMAIL_DOMAIN}`
+
+  try {
+    const passwordHash = await hash(data.password, 10)
+
+    await sql(
+      `INSERT INTO users (email, password_hash, name, role)
+       VALUES ($1, $2, $3, $4)`,
+      [email, passwordHash, data.name.trim(), data.role]
+    )
+
+    revalidatePath("/admin/settings")
+    return { success: true }
+  } catch (error) {
+    console.error("Error creating worker:", error)
+    throw new Error("No se pudo crear el trabajador. Verifica si el correo ya existe")
+  }
+}
+
+export async function removeWorker(workerId: number) {
+  const session = await auth()
+  if (!session?.user || session.user.role !== "ADMIN") {
+    throw new Error("No autorizado")
+  }
+
+  const currentUserId = parseInt(session.user.id, 10)
+  if (workerId === currentUserId) {
+    throw new Error("No puedes eliminar tu propio usuario")
+  }
+
+  try {
+    await sql("DELETE FROM users WHERE id = $1", [workerId])
+    revalidatePath("/admin/settings")
+    return { success: true }
+  } catch (error) {
+    console.error("Error removing worker:", error)
+    throw new Error("No se pudo eliminar el trabajador")
+  }
+}
+
+// Settings - WhatsApp recipients
+export async function addAlertRecipient(phone: string) {
+  const session = await auth()
+  if (!session?.user || session.user.role !== "ADMIN") {
+    throw new Error("No autorizado")
+  }
+
+  const normalizedPhone = phone.replace(/\s+/g, "")
+  if (!/^\+\d{8,15}$/.test(normalizedPhone)) {
+    throw new Error("Formato invalido. Usa formato internacional, por ejemplo +521234567890")
+  }
+
+  await ensureWhatsAppRecipientsTable()
+
+  try {
+    await sql(
+      `INSERT INTO whatsapp_recipients (phone, is_active)
+       VALUES ($1, TRUE)
+       ON CONFLICT (phone)
+       DO UPDATE SET is_active = TRUE`,
+      [normalizedPhone]
+    )
+
+    revalidatePath("/admin/settings")
+    return { success: true }
+  } catch (error) {
+    console.error("Error adding recipient:", error)
+    throw new Error("No se pudo guardar el numero")
+  }
+}
+
+export async function removeAlertRecipient(recipientId: number) {
+  const session = await auth()
+  if (!session?.user || session.user.role !== "ADMIN") {
+    throw new Error("No autorizado")
+  }
+
+  await ensureWhatsAppRecipientsTable()
+
+  try {
+    await sql("DELETE FROM whatsapp_recipients WHERE id = $1", [recipientId])
+    revalidatePath("/admin/settings")
+    return { success: true }
+  } catch (error) {
+    console.error("Error removing recipient:", error)
+    throw new Error("No se pudo eliminar el numero")
   }
 }

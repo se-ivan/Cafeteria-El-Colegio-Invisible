@@ -26,10 +26,14 @@ interface CheckoutDialogProps {
 export function CheckoutDialog({ open, onOpenChange, items, onConfirm }: CheckoutDialogProps) {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(null)
   const [notes, setNotes] = useState("")
+  const [cashReceived, setCashReceived] = useState("")
   const [isProcessing, setIsProcessing] = useState(false)
   const [success, setSuccess] = useState(false)
 
   const total = items.reduce((sum, item) => sum + (item.product.price * item.quantity), 0)
+  const cashReceivedNumber = parseFloat(cashReceived || "0")
+  const change = paymentMethod === "CASH" ? cashReceivedNumber - total : 0
+  const isInsufficientCash = paymentMethod === "CASH" && cashReceived !== "" && cashReceivedNumber < total
 
   const handleConfirm = async () => {
     if (!paymentMethod) return
@@ -42,6 +46,7 @@ export function CheckoutDialog({ open, onOpenChange, items, onConfirm }: Checkou
         setSuccess(false)
         setPaymentMethod(null)
         setNotes("")
+        setCashReceived("")
         onOpenChange(false)
       }, 1500)
     } catch (error) {
@@ -55,6 +60,7 @@ export function CheckoutDialog({ open, onOpenChange, items, onConfirm }: Checkou
     if (!isProcessing && !success) {
       setPaymentMethod(null)
       setNotes("")
+      setCashReceived("")
       onOpenChange(false)
     }
   }
@@ -112,6 +118,31 @@ export function CheckoutDialog({ open, onOpenChange, items, onConfirm }: Checkou
             </Button>
           </div>
 
+          {paymentMethod === "CASH" ? (
+            <div className="space-y-2 rounded-xl border border-emerald-100 bg-emerald-50 p-3">
+              <Label htmlFor="cashReceived" className="text-gray-700">Monto recibido</Label>
+              <Input
+                id="cashReceived"
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="0.00"
+                value={cashReceived}
+                onChange={(e) => setCashReceived(e.target.value)}
+                className="border-emerald-200 bg-white focus:border-emerald-500"
+              />
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-600">Cambio</span>
+                <span className={isInsufficientCash ? "font-semibold text-red-600" : "font-semibold text-emerald-700"}>
+                  ${Math.max(change, 0).toFixed(2)}
+                </span>
+              </div>
+              {isInsufficientCash ? (
+                <p className="text-xs text-red-600">El monto recibido es menor al total.</p>
+              ) : null}
+            </div>
+          ) : null}
+
           <div className="space-y-2">
             <Label htmlFor="notes" className="text-gray-700">Notas (opcional)</Label>
             <Input
@@ -130,7 +161,7 @@ export function CheckoutDialog({ open, onOpenChange, items, onConfirm }: Checkou
           </Button>
           <Button
             onClick={handleConfirm}
-            disabled={!paymentMethod || isProcessing}
+            disabled={!paymentMethod || isProcessing || isInsufficientCash}
             className="bg-blue-500 hover:bg-blue-600 text-white shadow-lg shadow-blue-500/25"
           >
             {isProcessing ? (

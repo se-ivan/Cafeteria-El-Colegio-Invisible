@@ -93,3 +93,18 @@ export interface SessionUser {
   name: string
   role: UserRole
 }
+
+export interface WorkerUser {
+  id: number
+  email: string
+  name: string
+  role: UserRole
+  created_at: Date
+}
+
+export interface WhatsAppRecipient {
+  id: number
+  phone: string
+  is_active: boolean
+  created_at: Date
+}

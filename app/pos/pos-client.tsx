@@ -6,16 +6,26 @@ import { POSHeader } from "@/components/pos/pos-header"
 import { ProductGrid } from "@/components/pos/product-grid"
 import { Cart } from "@/components/pos/cart"
 import { CheckoutDialog } from "@/components/pos/checkout-dialog"
+import { POSAlerts } from "@/components/pos/pos-alerts"
 import { processSale } from "@/lib/actions"
-import type { Category, Product, CartItem, PaymentMethod } from "@/lib/types"
+import { toast } from "sonner"
+import type { Category, Product, CartItem, PaymentMethod, Supply } from "@/lib/types"
 
 interface POSClientProps {
   categories: Category[]
   products: Product[]
   todaySales: { total: number; count: number }
+  salesBreakdown: { cashTotal: number; cardTotal: number; tickets: number }
+  lowStockSupplies: Supply[]
 }
 
-export function POSClient({ categories, products, todaySales }: POSClientProps) {
+export function POSClient({
+  categories,
+  products,
+  todaySales,
+  salesBreakdown,
+  lowStockSupplies,
+}: POSClientProps) {
   const router = useRouter()
   const [cart, setCart] = useState<CartItem[]>([])
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false)
@@ -55,18 +65,39 @@ export function POSClient({ categories, products, todaySales }: POSClientProps) 
   }
 
   const handleCheckout = async (paymentMethod: PaymentMethod, notes?: string) => {
-    await processSale(cart, paymentMethod, notes)
-    setCart([])
-    router.refresh()
+    try {
+      const result = await processSale(cart, paymentMethod, notes)
+      setCart([])
+      setIsCheckoutOpen(false)
+
+      toast.success("Venta registrada", {
+        description: `Ticket #${result.saleId} generado por $${result.total.toFixed(2)}`,
+      })
+
+      if (result.lowStockCount > 0) {
+        toast.warning("Inventario con alerta", {
+          description: `${result.lowStockCount} insumos requieren reabastecimiento`,
+        })
+      }
+
+      router.refresh()
+    } catch (error) {
+      console.error("Checkout error:", error)
+      toast.error("No se pudo completar la venta", {
+        description: "Revisa la conexion y vuelve a intentar.",
+      })
+      throw error
+    }
   }
 
   return (
-    <div className="h-screen flex flex-col bg-gray-50">
-      <POSHeader todaySales={todaySales} />
+    <div className="flex h-dvh flex-col bg-gray-50">
+      <POSHeader todaySales={todaySales} salesBreakdown={salesBreakdown} />
 
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
         {/* Product Grid */}
-        <div className="flex-1 p-6 overflow-hidden">
+        <div className="min-h-0 flex-1 overflow-hidden p-3 sm:p-4 lg:p-6">
+          <POSAlerts lowStockSupplies={lowStockSupplies} />
           <ProductGrid
             categories={categories}
             products={products}
@@ -75,7 +106,7 @@ export function POSClient({ categories, products, todaySales }: POSClientProps) 
         </div>
 
         {/* Cart */}
-        <div className="w-[400px] flex-shrink-0">
+        <div className="max-h-[48vh] border-t border-gray-100 lg:max-h-none lg:w-100 lg:shrink-0 lg:border-t-0 lg:border-l">
           <Cart
             items={cart}
             onUpdateQuantity={updateQuantity}

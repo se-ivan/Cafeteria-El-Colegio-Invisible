@@ -1,10 +1,36 @@
 import { neon } from "@neondatabase/serverless"
+import { PrismaClient } from "@prisma/client"
+import { PrismaNeon } from "@prisma/adapter-neon"
 
-if (!process.env.DATABASE_URL) {
-  throw new Error("DATABASE_URL environment variable is not set")
+const databaseUrl = process.env.DATABASE_URL
+
+const globalForPrisma = globalThis as unknown as {
+  prisma: PrismaClient | undefined
 }
 
-export const sql = neon(process.env.DATABASE_URL)
+function createPrismaClient(): PrismaClient {
+  if (!databaseUrl) {
+    throw new Error("DATABASE_URL environment variable is not set")
+  }
+  const adapter = new PrismaNeon({ connectionString: databaseUrl })
+  return new PrismaClient({ adapter })
+}
+
+export const prisma =
+  typeof window === "undefined"
+    ? (globalForPrisma.prisma ?? createPrismaClient())
+    : ({} as PrismaClient)
+
+if (typeof window === "undefined" && process.env.NODE_ENV !== "production") {
+  globalForPrisma.prisma = prisma
+}
+
+export const sql: any =
+  typeof window === "undefined" && databaseUrl
+    ? neon(databaseUrl)
+    : ((() => {
+        throw new Error("sql client is only available on the server")
+      }) as unknown as ReturnType<typeof neon>)
 
 // Type definitions for database models
 export type Role = "ADMIN" | "CASHIER"

@@ -1,4 +1,5 @@
 import type { Supply } from "@/lib/types"
+import { sql } from "@/lib/db"
 
 const WHATSAPP_API_URL = "https://graph.facebook.com/v18.0"
 
@@ -13,16 +14,42 @@ interface WhatsAppResponse {
   }
 }
 
+async function ensureWhatsAppRecipientsTable() {
+  await sql(`
+    CREATE TABLE IF NOT EXISTS whatsapp_recipients (
+      id SERIAL PRIMARY KEY,
+      phone TEXT NOT NULL UNIQUE,
+      is_active BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `)
+}
+
+async function getRecipientPhones(): Promise<string[]> {
+  await ensureWhatsAppRecipientsTable()
+
+  const recipients = await sql(`
+    SELECT phone
+    FROM whatsapp_recipients
+    WHERE is_active = TRUE
+    ORDER BY created_at DESC
+  `) as { phone: string }[]
+
+  return recipients.map((r) => r.phone)
+}
+
 /**
  * Send a WhatsApp message using Meta Business API
  */
-export async function sendWhatsAppMessage(message: string): Promise<{ success: boolean; error?: string }> {
+export async function sendWhatsAppMessage(
+  message: string,
+  recipientPhone: string
+): Promise<{ success: boolean; error?: string }> {
   const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID
   const accessToken = process.env.WHATSAPP_ACCESS_TOKEN
-  const recipientPhone = process.env.WHATSAPP_RECIPIENT_PHONE
 
   // Check if WhatsApp is configured
-  if (!phoneNumberId || !accessToken || !recipientPhone) {
+  if (!phoneNumberId || !accessToken) {
     console.log("[WhatsApp] Not configured - skipping alert")
     return { success: false, error: "WhatsApp not configured" }
   }
@@ -106,6 +133,19 @@ export async function sendInventoryAlert(supplies: Supply[]): Promise<{ success:
     return { success: true }
   }
 
+  const recipients = await getRecipientPhones()
+  if (recipients.length === 0) {
+    console.log("[WhatsApp] No recipients configured - skipping alert")
+    return { success: false, error: "No recipients configured" }
+  }
+
   const message = formatInventoryAlert(supplies)
-  return sendWhatsAppMessage(message)
+
+  const results = await Promise.all(recipients.map((phone) => sendWhatsAppMessage(message, phone)))
+  const firstError = results.find((r) => !r.success)?.error
+
+  return {
+    success: results.some((r) => r.success),
+    error: firstError,
+  }
 }

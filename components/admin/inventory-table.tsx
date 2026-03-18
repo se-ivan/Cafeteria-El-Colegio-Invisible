@@ -79,7 +79,7 @@ export function InventoryTable({ supplies }: InventoryTableProps) {
   return (
     <div className="space-y-4">
       {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-stone-400" />
           <Input
@@ -89,7 +89,7 @@ export function InventoryTable({ supplies }: InventoryTableProps) {
             className="pl-9"
           />
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {(["ALL", "OK", "LOW", "OUT"] as const).map((status) => (
             <Button
               key={status}
@@ -106,16 +106,16 @@ export function InventoryTable({ supplies }: InventoryTableProps) {
       </div>
 
       {/* Table */}
-      <div className="border rounded-lg bg-white">
+      <div className="overflow-x-auto rounded-lg border bg-white">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[300px]">Insumo</TableHead>
+              <TableHead className="min-w-48">Insumo</TableHead>
               <TableHead>Unidad</TableHead>
               <TableHead className="text-right">Stock Actual</TableHead>
               <TableHead className="text-right">Minimo</TableHead>
               <TableHead>Estatus</TableHead>
-              <TableHead className="text-right">Acciones</TableHead>
+              <TableHead className="min-w-28 text-right">Acciones</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>

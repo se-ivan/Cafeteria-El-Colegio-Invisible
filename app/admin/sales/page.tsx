@@ -11,14 +11,14 @@ export default async function SalesPage() {
   ])
 
   return (
-    <div className="p-6">
+    <div className="p-4 sm:p-6">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-stone-800">Ventas</h1>
         <p className="text-stone-500">Historial de ventas</p>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <div className="bg-white p-4 rounded-lg border">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-teal-100 rounded-lg">

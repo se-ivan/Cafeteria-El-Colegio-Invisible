@@ -19,8 +19,8 @@ export default async function InventoryPage() {
   }
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
+    <div className="p-4 sm:p-6">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-stone-800">Inventario</h1>
           <p className="text-stone-500">Gestiona tus insumos y stock</p>
@@ -29,7 +29,7 @@ export default async function InventoryPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <div className="bg-white p-4 rounded-lg border">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-stone-100 rounded-lg">

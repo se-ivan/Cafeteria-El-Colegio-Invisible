@@ -7,10 +7,13 @@ export async function authenticate(
   prevState: { error: string } | undefined,
   formData: FormData
 ) {
+  const email = String(formData.get("email") ?? "")
+  const password = String(formData.get("password") ?? "")
+
   try {
     await signIn("credentials", {
-      email: formData.get("email"),
-      password: formData.get("password"),
+      email,
+      password,
       redirectTo: "/"
     })
   } catch (error) {

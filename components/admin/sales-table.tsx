@@ -43,7 +43,7 @@ export function SalesTable({ sales }: SalesTableProps) {
   return (
     <div className="space-y-4">
       {/* Search */}
-      <div className="relative max-w-md">
+      <div className="relative w-full max-w-md">
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-stone-400" />
         <Input
           placeholder="Buscar por ID o vendedor..."
@@ -54,14 +54,14 @@ export function SalesTable({ sales }: SalesTableProps) {
       </div>
 
       {/* Table */}
-      <div className="border rounded-lg bg-white">
+      <div className="overflow-x-auto rounded-lg border bg-white">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[100px]">ID</TableHead>
+              <TableHead className="min-w-20">ID</TableHead>
               <TableHead>Fecha</TableHead>
               <TableHead>Vendedor</TableHead>
-              <TableHead>Metodo de Pago</TableHead>
+              <TableHead className="min-w-36">Metodo de Pago</TableHead>
               <TableHead className="text-right">Total</TableHead>
             </TableRow>
           </TableHeader>

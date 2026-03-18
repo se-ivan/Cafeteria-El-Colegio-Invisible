@@ -1,8 +1,8 @@
 import NextAuth from "next-auth"
 import Credentials from "next-auth/providers/credentials"
 import { compare } from "bcryptjs"
-import { sql } from "@/lib/db"
-import type { User, UserRole } from "@/lib/types"
+import { prisma } from "@/lib/db"
+import type { UserRole } from "@/lib/types"
 
 declare module "next-auth" {
   interface Session {
@@ -14,12 +14,6 @@ declare module "next-auth" {
     }
   }
   interface User {
-    role: UserRole
-  }
-}
-
-declare module "@auth/core/jwt" {
-  interface JWT {
     role: UserRole
   }
 }
@@ -41,19 +35,15 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         const password = credentials.password as string
 
         try {
-          const users = await sql<User[]>`
-            SELECT id, email, password_hash, name, role 
-            FROM users 
-            WHERE email = ${email}
-          `
+          const user = await prisma.user.findUnique({
+            where: { email }
+          })
 
-          if (users.length === 0) {
+          if (!user) {
             return null
           }
 
-          const user = users[0]
           const isValid = await compare(password, user.password_hash)
-
           if (!isValid) {
             return null
           }
@@ -80,8 +70,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     },
     async session({ session, token }) {
       if (session.user) {
+        const typedToken = token as typeof token & { role?: UserRole }
         session.user.id = token.sub!
-        session.user.role = token.role
+        session.user.role = typedToken.role ?? "CASHIER"
       }
       return session
     }

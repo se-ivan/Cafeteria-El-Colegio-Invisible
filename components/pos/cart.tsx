@@ -18,8 +18,8 @@ export function Cart({ items, onUpdateQuantity, onRemoveItem, onCheckout, onClea
   const itemCount = items.reduce((sum, item) => sum + item.quantity, 0)
 
   return (
-    <div className="flex flex-col h-full bg-white border-l border-gray-100">
-      <div className="p-5 border-b border-gray-100">
+    <div className="flex h-full min-h-0 flex-col bg-white">
+      <div className="border-b border-gray-100 p-4 sm:p-5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center">
@@ -83,10 +83,10 @@ export function Cart({ items, onUpdateQuantity, onRemoveItem, onCheckout, onClea
         )}
       </ScrollArea>
 
-      <div className="p-5 border-t border-gray-100 bg-gray-50/50">
+      <div className="border-t border-gray-100 bg-gray-50/50 p-4 sm:p-5">
         <div className="flex items-center justify-between mb-5">
           <span className="text-gray-600">Total</span>
-          <span className="text-3xl font-bold text-gray-900">${total.toFixed(2)}</span>
+          <span className="text-2xl font-bold text-gray-900 sm:text-3xl">${total.toFixed(2)}</span>
         </div>
         <div className="flex gap-3">
           <Button
