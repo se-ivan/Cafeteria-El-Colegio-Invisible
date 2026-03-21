@@ -3,9 +3,10 @@
 import { sql } from "@/lib/db"
 import { auth } from "@/lib/auth"
 import { revalidatePath } from "next/cache"
-import type { PaymentMethod, SupplyStatus, CartItem, Supply } from "@/lib/types"
+import type { PaymentMethod, SupplyStatus, CartItem, Supply, RecipeItem } from "@/lib/types"
 import { sendInventoryAlert } from "@/lib/whatsapp"
 import { hash } from "bcryptjs"
+import { getRecipeByProduct as dbGetRecipeByProduct } from "@/lib/queries"
 
 const WORKER_EMAIL_DOMAIN = "@elcolegioinvisible.com"
 
@@ -25,6 +26,15 @@ function calculateStatus(currentStock: number, minStock: number): SupplyStatus {
   if (currentStock <= 0) return "OUT"
   if (currentStock <= minStock) return "LOW"
   return "OK"
+}
+
+// Get recipe items for a product (used by client components)
+export async function getRecipeAction(productId: number): Promise<RecipeItem[]> {
+  const session = await auth()
+  if (!session?.user?.id) {
+    throw new Error("No autorizado")
+  }
+  return dbGetRecipeByProduct(productId)
 }
 
 // Process a sale
@@ -218,6 +228,7 @@ export async function updateSupplyMinStock(supplyId: number, newMinStock: number
 // Create new supply
 export async function createSupply(data: {
   name: string
+  category?: string
   unit: string
   currentStock: number
   minStock: number
@@ -231,9 +242,9 @@ export async function createSupply(data: {
 
   try {
     await sql(
-      `INSERT INTO supplies (name, unit, current_stock, min_stock, status)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [data.name, data.unit, data.currentStock, data.minStock, status]
+      `INSERT INTO supplies (name, category, unit, current_stock, min_stock, status)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [data.name, data.category || "Otros", data.unit, data.currentStock, data.minStock, status]
     )
 
     revalidatePath("/admin/inventory")
@@ -452,5 +463,84 @@ export async function removeAlertRecipient(recipientId: number) {
   } catch (error) {
     console.error("Error removing recipient:", error)
     throw new Error("No se pudo eliminar el numero")
+  }
+}
+
+export async function createAdminMember(data: {
+  name: string
+  email: string
+  password: string
+  role: "ADMIN" | "CASHIER"
+}) {
+  const session = await auth()
+  if (!session?.user || session.user.role !== "ADMIN") {
+    throw new Error("No autorizado")
+  }
+
+  const name = data.name.trim()
+  const email = data.email.trim().toLowerCase()
+  const password = data.password.trim()
+
+  if (!name) {
+    throw new Error("El nombre es obligatorio")
+  }
+
+  if (!/^\S+@\S+\.\S+$/.test(email)) {
+    throw new Error("Correo invalido")
+  }
+
+  if (password.length < 6) {
+    throw new Error("La contrasena debe tener al menos 6 caracteres")
+  }
+
+  if (data.role !== "ADMIN" && data.role !== "CASHIER") {
+    throw new Error("Rol invalido")
+  }
+
+  try {
+    const passwordHash = await hash(password, 10)
+
+    await sql(
+      `INSERT INTO users (email, password_hash, name, role)
+       VALUES ($1, $2, $3, $4)`,
+      [email, passwordHash, name, data.role]
+    )
+
+    revalidatePath("/admin")
+    revalidatePath("/admin/settings")
+    return { success: true }
+  } catch (error) {
+    console.error("Error creating member:", error)
+    throw new Error("No se pudo crear el miembro. Verifica que el correo no exista")
+  }
+}
+
+export async function resetMemberPassword(userId: number, newPassword: string) {
+  const session = await auth()
+  if (!session?.user || session.user.role !== "ADMIN") {
+    throw new Error("No autorizado")
+  }
+
+  const safePassword = newPassword.trim()
+  if (safePassword.length < 6) {
+    throw new Error("La contrasena debe tener al menos 6 caracteres")
+  }
+
+  try {
+    const passwordHash = await hash(safePassword, 10)
+
+    await sql(
+      `UPDATE users
+       SET password_hash = $1, updated_at = NOW()
+       WHERE id = $2`,
+      [passwordHash, userId]
+    )
+
+    revalidatePath("/admin")
+    revalidatePath("/admin/settings")
+    return { success: true }
+  } catch (error) {
+    console.error("Error resetting member password:", error)
+    throw new Error("No se pudo restablecer la contrasena")
   }
 }

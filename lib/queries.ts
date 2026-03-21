@@ -172,3 +172,137 @@ export async function getWhatsAppRecipients(): Promise<WhatsAppRecipient[]> {
 
   return recipients
 }
+
+type DashboardKpis = {
+  todaySalesTotal: number
+  todaySalesCount: number
+  monthSalesTotal: number
+  monthSalesCount: number
+  activeSellers: number
+  lowStockSupplies: number
+}
+
+type DashboardChartPoint = {
+  day: string
+  total: number
+}
+
+type DashboardSellerPerformance = {
+  userId: number
+  name: string
+  salesCount: number
+  revenue: number
+  averageTicket: number
+}
+
+type DashboardMember = {
+  id: number
+  name: string
+  email: string
+  role: "ADMIN" | "CASHIER"
+  created_at: Date
+}
+
+export type AdminDashboardData = {
+  kpis: DashboardKpis
+  salesByDay: DashboardChartPoint[]
+  paymentSplitMonth: {
+    cash: number
+    card: number
+  }
+  sellerPerformance: DashboardSellerPerformance[]
+  members: DashboardMember[]
+}
+
+export async function getAdminDashboardData(): Promise<AdminDashboardData> {
+  const [todayStats, monthStats, activeSellers, lowStock, salesByDay, paymentSplit, members, sellerPerformance] =
+    await Promise.all([
+      sql(
+        `SELECT
+          COALESCE(SUM(total), 0) AS total,
+          COUNT(*) AS count
+        FROM sales
+        WHERE created_at >= CURRENT_DATE`
+      ) as { total: string; count: string }[],
+      sql(
+        `SELECT
+          COALESCE(SUM(total), 0) AS total,
+          COUNT(*) AS count
+        FROM sales
+        WHERE created_at >= date_trunc('month', CURRENT_DATE)`
+      ) as { total: string; count: string }[],
+      sql(`SELECT COUNT(*) AS count FROM users WHERE role = 'CASHIER'`) as { count: string }[],
+      sql(`SELECT COUNT(*) AS count FROM supplies WHERE status IN ('LOW', 'OUT')`) as { count: string }[],
+      sql(
+        `WITH days AS (
+          SELECT generate_series(CURRENT_DATE - INTERVAL '13 days', CURRENT_DATE, INTERVAL '1 day')::date AS day
+        )
+        SELECT
+          to_char(d.day, 'DD Mon') AS day,
+          COALESCE(SUM(s.total), 0) AS total
+        FROM days d
+        LEFT JOIN sales s ON s.created_at::date = d.day
+        GROUP BY d.day
+        ORDER BY d.day ASC`
+      ) as { day: string; total: string }[],
+      sql(
+        `SELECT payment_method, COALESCE(SUM(total), 0) AS total
+        FROM sales
+        WHERE created_at >= date_trunc('month', CURRENT_DATE)
+        GROUP BY payment_method`
+      ) as { payment_method: "CASH" | "CARD"; total: string }[],
+      sql(
+        `SELECT id, name, email, role, created_at
+        FROM users
+        ORDER BY created_at DESC`
+      ) as DashboardMember[],
+      sql(
+        `SELECT
+          u.id AS user_id,
+          u.name,
+          COUNT(s.id) AS sales_count,
+          COALESCE(SUM(s.total), 0) AS revenue,
+          COALESCE(AVG(s.total), 0) AS average_ticket
+        FROM users u
+        LEFT JOIN sales s
+          ON s.user_id = u.id
+          AND s.created_at >= CURRENT_DATE - INTERVAL '30 days'
+        WHERE u.role = 'CASHIER'
+        GROUP BY u.id, u.name
+        ORDER BY COALESCE(SUM(s.total), 0) DESC, COUNT(s.id) DESC`
+      ) as { user_id: number; name: string; sales_count: string; revenue: string; average_ticket: string }[],
+    ])
+
+  const split = paymentSplit.reduce(
+    (acc, row) => {
+      if (row.payment_method === "CASH") acc.cash = parseFloat(row.total || "0")
+      if (row.payment_method === "CARD") acc.card = parseFloat(row.total || "0")
+      return acc
+    },
+    { cash: 0, card: 0 }
+  )
+
+  return {
+    kpis: {
+      todaySalesTotal: parseFloat(todayStats[0]?.total || "0"),
+      todaySalesCount: parseInt(todayStats[0]?.count || "0", 10),
+      monthSalesTotal: parseFloat(monthStats[0]?.total || "0"),
+      monthSalesCount: parseInt(monthStats[0]?.count || "0", 10),
+      activeSellers: parseInt(activeSellers[0]?.count || "0", 10),
+      lowStockSupplies: parseInt(lowStock[0]?.count || "0", 10),
+    },
+    salesByDay: salesByDay.map((row) => ({
+      day: row.day,
+      total: parseFloat(row.total || "0"),
+    })),
+    paymentSplitMonth: split,
+    sellerPerformance: sellerPerformance.map((row) => ({
+      userId: row.user_id,
+      name: row.name,
+      salesCount: parseInt(row.sales_count || "0", 10),
+      revenue: parseFloat(row.revenue || "0"),
+      averageTicket: parseFloat(row.average_ticket || "0"),
+    })),
+    members,
+  }
+}

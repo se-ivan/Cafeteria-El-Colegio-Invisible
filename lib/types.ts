@@ -23,6 +23,7 @@ export interface Category {
 export interface Supply {
   id: number
   name: string
+  category?: string | null
   unit: string
   current_stock: number
   min_stock: number

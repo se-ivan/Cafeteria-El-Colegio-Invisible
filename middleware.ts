@@ -12,15 +12,21 @@ export function middleware(request: NextRequest) {
 
   // Public routes - allow access
   if (pathname === "/login" || pathname.startsWith("/api/auth") || pathname.startsWith("/api/")) {
-    return NextResponse.next()
+    const response = NextResponse.next()
+    response.headers.set("X-Robots-Tag", "noindex, nofollow")
+    return response
   }
 
   // Protected routes - require authentication
   if (!isAuthenticated) {
-    return NextResponse.redirect(new URL("/login", request.url))
+    const redirectResponse = NextResponse.redirect(new URL("/login", request.url))
+    redirectResponse.headers.set("X-Robots-Tag", "noindex, nofollow")
+    return redirectResponse
   }
 
-  return NextResponse.next()
+  const response = NextResponse.next()
+  response.headers.set("X-Robots-Tag", "noindex, nofollow")
+  return response
 }
 
 export const config = {

@@ -28,36 +28,40 @@ export default async function AdminLayout({
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 md:flex">
-      <AdminSidebar className="hidden md:flex" />
+    <div className="min-h-screen bg-slate-50 md:flex font-sans">
+      <AdminSidebar className="hidden md:flex flex-shrink-0" />
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/95 px-4 py-3 backdrop-blur md:hidden">
+      <div className="flex min-w-0 flex-1 flex-col h-screen overflow-hidden">
+        <header className="sticky top-0 z-30 border-b border-slate-100 bg-white/80 px-4 py-3 backdrop-blur-md md:hidden shadow-sm">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-semibold text-slate-900">Panel de Administracion</p>
-              <p className="text-xs text-slate-500">El Colegio Invisible</p>
+              <p className="text-sm font-semibold tracking-tight text-slate-900">Admin</p>
+              <p className="text-[10px] font-medium text-blue-500 uppercase tracking-widest mt-0.5">El Colegio Invisible</p>
             </div>
             <Sheet>
               <SheetTrigger asChild>
-                <Button variant="outline" size="icon" className="border-slate-200">
+                <Button variant="outline" size="icon" className="border-slate-100 shadow-sm rounded-lg hover:bg-slate-50 text-slate-600">
                   <Menu className="h-4 w-4" />
                 </Button>
               </SheetTrigger>
-              <SheetContent side="left" className="w-[86vw] max-w-xs p-0">
+              <SheetContent side="left" className="w-[86vw] max-w-xs p-0 border-r border-slate-100 shadow-xl">
                 <SheetHeader className="sr-only">
                   <SheetTitle>Navegacion de administracion</SheetTitle>
                   <SheetDescription>
                     Accesos a inventario, productos, ventas y configuracion.
                   </SheetDescription>
                 </SheetHeader>
-                <AdminSidebar className="h-full w-full border-r-0" />
+                <AdminSidebar className="h-full w-full border-r-0 shadow-none" />
               </SheetContent>
             </Sheet>
           </div>
         </header>
 
-        <main className="flex-1 overflow-auto">{children}</main>
+        <main className="flex-1 overflow-auto p-4 md:p-6 lg:p-8 relative">
+          <div className="mx-auto max-w-7xl">
+            {children}
+          </div>
+        </main>
       </div>
     </div>
   )

@@ -128,24 +128,26 @@ export function SettingsPanel({ workers, recipients, currentUserId }: SettingsPa
       ) : null}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-sm text-stone-500">Trabajadores registrados</p>
-            <p className="text-3xl font-bold text-stone-900">{workersCount}</p>
+        <Card className="rounded-xl shadow-sm border-slate-100">
+          <CardContent className="p-5">
+            <p className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 mb-1">Trabajadores registrados</p>
+            <p className="text-3xl font-bold text-slate-900">{workersCount}</p>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-sm text-stone-500">Numeros para alertas</p>
-            <p className="text-3xl font-bold text-stone-900">{recipientsCount}</p>
+        <Card className="rounded-xl shadow-sm border-slate-100">
+          <CardContent className="p-5">
+            <p className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 mb-1">Numeros para alertas</p>
+            <p className="text-3xl font-bold text-slate-900">{recipientsCount}</p>
           </CardContent>
         </Card>
       </div>
 
-      <Card>
+      <Card className="rounded-xl shadow-sm border-slate-100">
         <CardHeader>
-          <div className="flex items-center gap-2">
-            <UserPlus className="h-5 w-5 text-cyan-600" />
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-blue-50 rounded-lg">
+              <UserPlus className="h-5 w-5 text-blue-500" />
+            </div>
             <CardTitle>Alta de trabajadores</CardTitle>
           </div>
           <CardDescription>
@@ -177,7 +179,7 @@ export function SettingsPanel({ workers, recipients, currentUserId }: SettingsPa
                     placeholder="ana.lopez"
                     required
                   />
-                  <span className="pr-3 text-xs text-stone-500">{DOMAIN}</span>
+                  <span className="pr-3 text-xs text-slate-500">{DOMAIN}</span>
                 </div>
               </div>
             </div>
@@ -210,17 +212,19 @@ export function SettingsPanel({ workers, recipients, currentUserId }: SettingsPa
               </div>
             </div>
 
-            <Button type="submit" disabled={isPending} className="bg-cyan-600 hover:bg-cyan-700">
+            <Button type="submit" disabled={isPending} className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm">
               {isPending ? "Guardando..." : "Crear trabajador"}
             </Button>
           </form>
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="rounded-xl shadow-sm border-slate-100">
         <CardHeader>
-          <div className="flex items-center gap-2">
-            <Users className="h-5 w-5 text-stone-700" />
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-slate-100 rounded-lg">
+              <Users className="h-5 w-5 text-slate-700" />
+            </div>
             <CardTitle>Trabajadores activos</CardTitle>
           </div>
           <CardDescription>
@@ -229,13 +233,13 @@ export function SettingsPanel({ workers, recipients, currentUserId }: SettingsPa
         </CardHeader>
         <CardContent className="space-y-3">
           {workers.length === 0 ? (
-            <p className="text-sm text-stone-500">No hay trabajadores registrados.</p>
+            <p className="text-sm text-slate-500">No hay trabajadores registrados.</p>
           ) : (
             workers.map((worker) => (
-              <div key={worker.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3">
+              <div key={worker.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-100 bg-white p-4 shadow-sm">
                 <div>
-                  <p className="font-medium text-stone-900">{worker.name}</p>
-                  <p className="text-sm text-stone-500">{worker.email}</p>
+                  <p className="font-medium text-slate-900">{worker.name}</p>
+                  <p className="text-sm text-slate-500">{worker.email}</p>
                 </div>
                 <div className="flex items-center gap-2">
                   <Badge variant={worker.role === "ADMIN" ? "default" : "secondary"}>
@@ -247,7 +251,7 @@ export function SettingsPanel({ workers, recipients, currentUserId }: SettingsPa
                     size="icon"
                     disabled={isPending || worker.id === currentUserId}
                     onClick={() => handleRemoveWorker(worker.id)}
-                    className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                    className="text-red-500 hover:bg-red-50 hover:text-red-600 rounded-lg"
                     title={worker.id === currentUserId ? "No puedes eliminar tu propio usuario" : "Eliminar"}
                   >
                     <Trash2 className="h-4 w-4" />
@@ -259,10 +263,12 @@ export function SettingsPanel({ workers, recipients, currentUserId }: SettingsPa
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="rounded-xl shadow-sm border-slate-100">
         <CardHeader>
-          <div className="flex items-center gap-2">
-            <Bell className="h-5 w-5 text-amber-600" />
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-amber-50 rounded-lg">
+              <Bell className="h-5 w-5 text-amber-500" />
+            </div>
             <CardTitle>Numeros para alertas de WhatsApp</CardTitle>
           </div>
           <CardDescription>
@@ -277,25 +283,25 @@ export function SettingsPanel({ workers, recipients, currentUserId }: SettingsPa
               placeholder="+521234567890"
               required
             />
-            <Button type="submit" disabled={isPending} className="bg-amber-600 hover:bg-amber-700">
+            <Button type="submit" disabled={isPending} className="bg-amber-500 hover:bg-amber-600 text-white shadow-sm">
               {isPending ? "Guardando..." : "Agregar numero"}
             </Button>
           </form>
 
-          <div className="space-y-2">
+          <div className="space-y-3">
             {recipients.length === 0 ? (
-              <p className="text-sm text-stone-500">No hay numeros configurados.</p>
+              <p className="text-sm text-slate-500">No hay numeros configurados.</p>
             ) : (
               recipients.map((recipient) => (
-                <div key={recipient.id} className="flex items-center justify-between rounded-lg border p-3">
-                  <p className="font-medium text-stone-900">{recipient.phone}</p>
+                <div key={recipient.id} className="flex items-center justify-between rounded-xl border border-slate-100 bg-white p-4 shadow-sm">
+                  <p className="font-medium text-slate-900">{recipient.phone}</p>
                   <Button
                     type="button"
                     variant="ghost"
                     size="icon"
                     disabled={isPending}
                     onClick={() => handleRemoveRecipient(recipient.id)}
-                    className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                    className="text-red-500 hover:bg-red-50 hover:text-red-600 rounded-lg"
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>

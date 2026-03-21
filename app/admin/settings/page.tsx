@@ -19,8 +19,8 @@ export default async function SettingsPage() {
   return (
     <div className="p-4 sm:p-6">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-stone-800">Configuracion</h1>
-        <p className="text-stone-500">Gestion de personal y alertas</p>
+        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Configuracion</h1>
+        <p className="text-slate-500 mt-1">Gestion de personal y alertas</p>
       </div>
 
       <SettingsPanel

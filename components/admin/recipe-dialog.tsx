@@ -21,8 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { updateRecipe } from "@/lib/actions"
-import { getRecipeByProduct } from "@/lib/queries"
+import { updateRecipe, getRecipeAction } from "@/lib/actions"
 import { Plus, Trash2 } from "lucide-react"
 import type { Supply, RecipeItem } from "@/lib/types"
 
@@ -49,7 +48,7 @@ export function RecipeDialog({ open, onOpenChange, productId, productName, suppl
   useEffect(() => {
     if (open && productId) {
       setIsLoading(true)
-      getRecipeByProduct(productId)
+      getRecipeAction(productId)
         .then((items: RecipeItem[]) => {
           setRecipeItems(items.map(item => ({
             supplyId: item.supply_id,
@@ -144,7 +143,7 @@ export function RecipeDialog({ open, onOpenChange, productId, productName, suppl
                 type="button"
                 onClick={handleAddItem}
                 disabled={!newSupplyId}
-                className="bg-teal-600 hover:bg-teal-700 text-white"
+                className="bg-blue-600 hover:bg-blue-700 text-white"
               >
                 <Plus className="h-4 w-4" />
               </Button>
@@ -153,7 +152,7 @@ export function RecipeDialog({ open, onOpenChange, productId, productName, suppl
             {/* Recipe items list */}
             <ScrollArea className="h-[300px]">
               {recipeItems.length === 0 ? (
-                <div className="text-center py-8 text-stone-500">
+                <div className="text-center py-8 text-slate-500">
                   No hay insumos en la receta
                 </div>
               ) : (
@@ -161,13 +160,13 @@ export function RecipeDialog({ open, onOpenChange, productId, productName, suppl
                   {recipeItems.map((item) => (
                     <div
                       key={item.supplyId}
-                      className="flex items-center gap-2 p-2 bg-stone-50 rounded-lg"
+                      className="flex items-center gap-2 p-2 bg-slate-50 rounded-lg"
                     >
                       <div className="flex-1 min-w-0">
                         <p className="font-medium text-sm truncate">
                           {getSupplyName(item.supplyId)}
                         </p>
-                        <p className="text-xs text-stone-500">
+                        <p className="text-xs text-slate-500">
                           {getSupplyUnit(item.supplyId)}
                         </p>
                       </div>
@@ -211,7 +210,7 @@ export function RecipeDialog({ open, onOpenChange, productId, productName, suppl
           <Button
             onClick={handleSave}
             disabled={isSaving}
-            className="bg-teal-600 hover:bg-teal-700 text-white"
+            className="bg-blue-600 hover:bg-blue-700 text-white"
           >
             {isSaving ? (
               <>
