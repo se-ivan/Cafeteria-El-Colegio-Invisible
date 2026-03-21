@@ -135,7 +135,7 @@ export default function LoginPage() {
                             )}
                         </div>
                         <div className="space-y-2">
-                            <Label htmlFor="password">ContraseÃ±a</Label>
+                            <Label htmlFor="password">Contraseña</Label>
                             <div className="relative">
                                 <Input
                                     {...register("password")}
