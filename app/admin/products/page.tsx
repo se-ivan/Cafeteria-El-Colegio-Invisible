@@ -1,11 +1,19 @@
 import { getProducts, getCategories, getSupplies } from "@/lib/queries"
+import { auth } from "@/lib/auth"
+import { hasPermission, PERMISSION_IDS } from "@/lib/permissions"
 import { ProductsTable } from "@/components/admin/products-table"
 import { AddProductDialog } from "@/components/admin/add-product-dialog"
+import { redirect } from "next/navigation"
 import { ShoppingBag } from "lucide-react"
 
 export const dynamic = "force-dynamic"
 
 export default async function ProductsPage() {
+  const session = await auth()
+  if (!session?.user?.id || !hasPermission(session.user, PERMISSION_IDS.PRODUCTS_MANAGE)) {
+    redirect("/pos")
+  }
+
   const [products, categories, supplies] = await Promise.all([
     getProducts(),
     getCategories(),

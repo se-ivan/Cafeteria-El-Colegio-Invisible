@@ -13,8 +13,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { addAlertRecipient, createWorker, removeAlertRecipient, removeWorker } from "@/lib/actions"
-import type { UserRole, WhatsAppRecipient, WorkerUser } from "@/lib/types"
+import {
+  addAlertRecipient,
+  createWorker,
+  removeAlertRecipient,
+  removeWorker,
+  updateWorkerAccess,
+} from "@/lib/actions"
+import { PERMISSION_CATALOG, permissionsForRole } from "@/lib/permissions"
+import type { AppPermission, UserRole, WhatsAppRecipient, WorkerUser } from "@/lib/types"
 import { Bell, Trash2, UserPlus, Users } from "lucide-react"
 
 type SettingsPanelProps = {
@@ -32,6 +39,20 @@ export function SettingsPanel({ workers, recipients, currentUserId }: SettingsPa
   const [workerEmailUser, setWorkerEmailUser] = useState("")
   const [workerPassword, setWorkerPassword] = useState("")
   const [workerRole, setWorkerRole] = useState<UserRole>("CASHIER")
+  const [workerPermissions, setWorkerPermissions] = useState<AppPermission[]>(permissionsForRole("CASHIER"))
+
+  const [accessDraft, setAccessDraft] = useState<Record<number, { role: UserRole; permissions: AppPermission[] }>>(
+    () =>
+      Object.fromEntries(
+        workers.map((worker) => [
+          worker.id,
+          {
+            role: worker.role,
+            permissions: permissionsForRole(worker.role, worker.permissions),
+          },
+        ])
+      )
+  )
 
   const [recipientPhone, setRecipientPhone] = useState("")
   const [message, setMessage] = useState<string | null>(null)
@@ -56,12 +77,14 @@ export function SettingsPanel({ workers, recipients, currentUserId }: SettingsPa
           emailLocalPart: workerEmailUser,
           password: workerPassword,
           role: workerRole,
+          permissions: workerPermissions,
         })
 
         setWorkerName("")
         setWorkerEmailUser("")
         setWorkerPassword("")
         setWorkerRole("CASHIER")
+        setWorkerPermissions(permissionsForRole("CASHIER"))
         setMessage("Trabajador creado correctamente")
       } catch (err) {
         const text = err instanceof Error ? err.message : "No se pudo crear el trabajador"
@@ -79,6 +102,55 @@ export function SettingsPanel({ workers, recipients, currentUserId }: SettingsPa
         setMessage("Trabajador eliminado")
       } catch (err) {
         const text = err instanceof Error ? err.message : "No se pudo eliminar el trabajador"
+        setError(text)
+      }
+    })
+  }
+
+  const setDraftRole = (workerId: number, role: UserRole) => {
+    setAccessDraft((prev) => ({
+      ...prev,
+      [workerId]: {
+        role,
+        permissions: permissionsForRole(role, prev[workerId]?.permissions || []),
+      },
+    }))
+  }
+
+  const toggleDraftPermission = (workerId: number, permission: AppPermission) => {
+    setAccessDraft((prev) => {
+      const current = prev[workerId]
+      if (!current || current.role === "ADMIN") return prev
+
+      const exists = current.permissions.includes(permission)
+      const nextPermissions = exists
+        ? current.permissions.filter((item) => item !== permission)
+        : [...current.permissions, permission]
+
+      return {
+        ...prev,
+        [workerId]: {
+          ...current,
+          permissions: nextPermissions,
+        },
+      }
+    })
+  }
+
+  const handleUpdateWorkerAccess = (workerId: number) => {
+    clearFeedback()
+    const draft = accessDraft[workerId]
+    if (!draft) return
+
+    startTransition(async () => {
+      try {
+        await updateWorkerAccess(workerId, {
+          role: draft.role,
+          permissions: draft.permissions,
+        })
+        setMessage("Acceso actualizado")
+      } catch (err) {
+        const text = err instanceof Error ? err.message : "No se pudo actualizar acceso"
         setError(text)
       }
     })
@@ -200,7 +272,13 @@ export function SettingsPanel({ workers, recipients, currentUserId }: SettingsPa
 
               <div className="space-y-2">
                 <Label>Rol</Label>
-                <Select value={workerRole} onValueChange={(value: UserRole) => setWorkerRole(value)}>
+                <Select
+                  value={workerRole}
+                  onValueChange={(value: UserRole) => {
+                    setWorkerRole(value)
+                    setWorkerPermissions(permissionsForRole(value, workerPermissions))
+                  }}
+                >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -209,6 +287,39 @@ export function SettingsPanel({ workers, recipients, currentUserId }: SettingsPa
                     <SelectItem value="ADMIN">Administrador</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <Label>Permisos</Label>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {PERMISSION_CATALOG.map((permission) => {
+                  const selected = workerRole === "ADMIN" || workerPermissions.includes(permission.id)
+                  return (
+                    <button
+                      key={permission.id}
+                      type="button"
+                      disabled={workerRole === "ADMIN"}
+                      onClick={() => {
+                        if (workerRole === "ADMIN") return
+                        setWorkerPermissions((prev) => {
+                          const hasItem = prev.includes(permission.id)
+                          return hasItem
+                            ? prev.filter((item) => item !== permission.id)
+                            : [...prev, permission.id]
+                        })
+                      }}
+                      className={`rounded-xl border px-3 py-2 text-left transition-colors ${
+                        selected
+                          ? "border-blue-200 bg-blue-50"
+                          : "border-slate-200 bg-white hover:bg-slate-50"
+                      } ${workerRole === "ADMIN" ? "opacity-70 cursor-not-allowed" : ""}`}
+                    >
+                      <p className="text-sm font-medium text-slate-800">{permission.label}</p>
+                      <p className="text-xs text-slate-500 mt-0.5">{permission.description}</p>
+                    </button>
+                  )
+                })}
               </div>
             </div>
 
@@ -237,10 +348,66 @@ export function SettingsPanel({ workers, recipients, currentUserId }: SettingsPa
           ) : (
             workers.map((worker) => (
               <div key={worker.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-100 bg-white p-4 shadow-sm">
-                <div>
+                <div className="space-y-2">
                   <p className="font-medium text-slate-900">{worker.name}</p>
                   <p className="text-sm text-slate-500">{worker.email}</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(accessDraft[worker.id]?.permissions || []).map((permission) => (
+                      <Badge key={permission} variant="secondary" className="text-[11px]">
+                        {permission}
+                      </Badge>
+                    ))}
+                  </div>
                 </div>
+
+                <div className="w-full rounded-xl border border-slate-100 bg-slate-50/50 p-3 space-y-3 lg:w-104">
+                  <div className="flex items-center gap-2">
+                    <Select
+                      value={accessDraft[worker.id]?.role || worker.role}
+                      onValueChange={(value: UserRole) => setDraftRole(worker.id, value)}
+                    >
+                      <SelectTrigger className="w-40 bg-white">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="CASHIER">Cajero</SelectItem>
+                        <SelectItem value="ADMIN">Administrador</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={isPending || worker.id === currentUserId}
+                      onClick={() => handleUpdateWorkerAccess(worker.id)}
+                    >
+                      Guardar acceso
+                    </Button>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {PERMISSION_CATALOG.map((permission) => {
+                      const draft = accessDraft[worker.id]
+                      const selected = draft?.role === "ADMIN" || draft?.permissions.includes(permission.id)
+                      return (
+                        <button
+                          key={`${worker.id}-${permission.id}`}
+                          type="button"
+                          disabled={isPending || worker.id === currentUserId || draft?.role === "ADMIN"}
+                          onClick={() => toggleDraftPermission(worker.id, permission.id)}
+                          className={`rounded-lg border px-2.5 py-2 text-left text-xs transition-colors ${
+                            selected
+                              ? "border-blue-200 bg-blue-50 text-blue-700"
+                              : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                          }`}
+                        >
+                          {permission.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
                 <div className="flex items-center gap-2">
                   <Badge variant={worker.role === "ADMIN" ? "default" : "secondary"}>
                     {worker.role === "ADMIN" ? "ADMIN" : "CAJERO"}

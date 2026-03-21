@@ -3,9 +3,11 @@ import { Geist, Geist_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { SessionProvider } from '@/components/providers/session-provider'
 import { Toaster } from '@/components/ui/sonner'
+import { auth } from '@/lib/auth'
 import './globals.css'
 
 const _geist = Geist({ subsets: ["latin"] });
+// ... (rest omitted to simplify patch or just let me do exact match)
 const _geistMono = Geist_Mono({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
@@ -39,15 +41,17 @@ export const viewport: Viewport = {
   userScalable: false,
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  const session = await auth()
+
   return (
     <html lang="es">
       <body className="font-sans antialiased">
-        <SessionProvider>
+        <SessionProvider session={session}>
           {children}
           <Toaster richColors position="top-right" />
         </SessionProvider>

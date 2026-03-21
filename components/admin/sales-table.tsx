@@ -68,7 +68,7 @@ export function SalesTable({ sales }: SalesTableProps) {
           <TableBody>
             {filteredSales.map((sale) => (
               <TableRow key={sale.id} className="border-slate-100 transition-colors hover:bg-slate-50/50">
-                <TableCell className="font-mono text-slate-500 text-xs text-blue-600">#{sale.id}</TableCell>
+                <TableCell className="font-mono text-xs text-blue-600">#{sale.id}</TableCell>
                 <TableCell className="text-sm font-medium text-slate-700">{formatDate(sale.created_at)}</TableCell>
                 <TableCell className="text-sm text-slate-600">{(sale as Sale & { user_name?: string }).user_name || "N/A"}</TableCell>
                 <TableCell>

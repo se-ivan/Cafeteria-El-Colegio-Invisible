@@ -1,4 +1,5 @@
 import { auth } from "@/lib/auth"
+import { hasPermission, PERMISSION_IDS } from "@/lib/permissions"
 import { redirect } from "next/navigation"
 import { SettingsPanel } from "@/components/admin/settings-panel"
 import { getWhatsAppRecipients, getWorkersForSettings } from "@/lib/queries"
@@ -9,6 +10,10 @@ export default async function SettingsPage() {
   const session = await auth()
   if (!session?.user?.id) {
     redirect("/login")
+  }
+
+  if (!hasPermission(session.user, PERMISSION_IDS.SETTINGS_MANAGE)) {
+    redirect("/pos")
   }
 
   const [workers, recipients] = await Promise.all([

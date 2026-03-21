@@ -1,10 +1,18 @@
 import { getSales, getTodaySales } from "@/lib/queries"
+import { auth } from "@/lib/auth"
+import { hasPermission, PERMISSION_IDS } from "@/lib/permissions"
 import { SalesTable } from "@/components/admin/sales-table"
+import { redirect } from "next/navigation"
 import { Receipt, DollarSign, TrendingUp } from "lucide-react"
 
 export const dynamic = "force-dynamic"
 
 export default async function SalesPage() {
+  const session = await auth()
+  if (!session?.user?.id || !hasPermission(session.user, PERMISSION_IDS.SALES_VIEW)) {
+    redirect("/pos")
+  }
+
   const [sales, todaySales] = await Promise.all([
     getSales(100),
     getTodaySales()

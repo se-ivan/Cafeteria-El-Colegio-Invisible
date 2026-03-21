@@ -1,4 +1,5 @@
 import { auth } from "@/lib/auth"
+import { canAccessAdminArea } from "@/lib/permissions"
 import { redirect } from "next/navigation"
 import { AdminSidebar } from "@/components/admin/admin-sidebar"
 import { Button } from "@/components/ui/button"
@@ -23,13 +24,13 @@ export default async function AdminLayout({
     redirect("/login")
   }
   
-  if (session.user.role !== "ADMIN") {
+  if (!canAccessAdminArea(session.user)) {
     redirect("/pos")
   }
 
   return (
     <div className="min-h-screen bg-slate-50 md:flex font-sans">
-      <AdminSidebar className="hidden md:flex flex-shrink-0" />
+      <AdminSidebar className="hidden md:flex shrink-0" user={session.user} />
 
       <div className="flex min-w-0 flex-1 flex-col h-screen overflow-hidden">
         <header className="sticky top-0 z-30 border-b border-slate-100 bg-white/80 px-4 py-3 backdrop-blur-md md:hidden shadow-sm">
@@ -51,7 +52,7 @@ export default async function AdminLayout({
                     Accesos a inventario, productos, ventas y configuracion.
                   </SheetDescription>
                 </SheetHeader>
-                <AdminSidebar className="h-full w-full border-r-0 shadow-none" />
+                <AdminSidebar className="h-full w-full border-r-0 shadow-none" user={session.user} />
               </SheetContent>
             </Sheet>
           </div>

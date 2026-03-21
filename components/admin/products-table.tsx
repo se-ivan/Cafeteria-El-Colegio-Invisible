@@ -134,7 +134,7 @@ export function ProductsTable({ products, categories, supplies }: ProductsTableP
               </div>
             </div>
 
-            <CardContent className="p-4 flex-1 flex flex-col gap-3">
+            <CardContent className="p-4 pt-4 flex-1 flex flex-col gap-3">
               {editingId === product.id ? (
                 <>
                   <div className="space-y-1.5">

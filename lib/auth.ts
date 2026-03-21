@@ -1,8 +1,9 @@
 import NextAuth from "next-auth"
 import Credentials from "next-auth/providers/credentials"
 import { compare } from "bcryptjs"
-import { prisma } from "@/lib/db"
-import type { UserRole } from "@/lib/types"
+import { prisma, sql } from "@/lib/db"
+import { ensureUserPermissionsColumn, permissionsForRole, sanitizePermissions } from "@/lib/permissions"
+import type { AppPermission, UserRole } from "@/lib/types"
 
 declare module "next-auth" {
   interface Session {
@@ -11,10 +12,19 @@ declare module "next-auth" {
       email: string
       name: string
       role: UserRole
+      permissions: AppPermission[]
     }
   }
   interface User {
     role: UserRole
+    permissions: AppPermission[]
+  }
+}
+
+declare module "next-auth/jwt" {
+  interface JWT {
+    role?: UserRole
+    permissions?: AppPermission[]
   }
 }
 
@@ -35,6 +45,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         const password = credentials.password as string
 
         try {
+          await ensureUserPermissionsColumn()
+
           const user = await prisma.user.findUnique({
             where: { email }
           })
@@ -48,11 +60,23 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             return null
           }
 
+          const permissionRows = await sql(
+            `SELECT permissions
+             FROM users
+             WHERE id = $1
+             LIMIT 1`,
+            [user.id]
+          ) as { permissions: string[] | null }[]
+
+          const dbPermissions = sanitizePermissions(permissionRows[0]?.permissions || [])
+          const effectivePermissions = permissionsForRole(user.role, dbPermissions)
+
           return {
             id: user.id.toString(),
             email: user.email,
             name: user.name,
-            role: user.role
+            role: user.role,
+            permissions: effectivePermissions,
           }
         } catch (error) {
           console.error("Auth error:", error)
@@ -65,14 +89,63 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     async jwt({ token, user }) {
       if (user) {
         token.role = user.role
+        token.permissions = user.permissions
       }
+
+      if (token.sub) {
+        try {
+          await ensureUserPermissionsColumn()
+          const rows = await sql(
+            `SELECT role, permissions
+             FROM users
+             WHERE id = $1
+             LIMIT 1`,
+            [Number(token.sub)]
+          ) as { role: UserRole; permissions: string[] | null }[]
+
+          if (rows.length > 0) {
+            const dbRole = rows[0].role
+            const dbPermissions = sanitizePermissions(rows[0].permissions || [])
+            token.role = dbRole
+            token.permissions = permissionsForRole(dbRole, dbPermissions)
+          }
+        } catch (error) {
+          console.error("JWT sync error:", error)
+        }
+      }
+
       return token
     },
     async session({ session, token }) {
       if (session.user) {
-        const typedToken = token as typeof token & { role?: UserRole }
         session.user.id = token.sub!
-        session.user.role = typedToken.role ?? "CASHIER"
+        session.user.role = token.role ?? "CASHIER"
+        session.user.permissions = permissionsForRole(
+          session.user.role,
+          sanitizePermissions(token.permissions || [])
+        )
+
+        if (token.sub) {
+          try {
+            await ensureUserPermissionsColumn()
+            const rows = await sql(
+              `SELECT role, permissions
+               FROM users
+               WHERE id = $1
+               LIMIT 1`,
+              [Number(token.sub)]
+            ) as { role: UserRole; permissions: string[] | null }[]
+
+            if (rows.length > 0) {
+              const dbRole = rows[0].role
+              const dbPermissions = sanitizePermissions(rows[0].permissions || [])
+              session.user.role = dbRole
+              session.user.permissions = permissionsForRole(dbRole, dbPermissions)
+            }
+          } catch (error) {
+            console.error("Session sync error:", error)
+          }
+        }
       }
       return session
     }

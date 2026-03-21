@@ -25,7 +25,7 @@ if (typeof window === "undefined" && process.env.NODE_ENV !== "production") {
   globalForPrisma.prisma = prisma
 }
 
-export const sql: any =
+export const sql: ReturnType<typeof neon> =
   typeof window === "undefined" && databaseUrl
     ? neon(databaseUrl)
     : ((() => {
@@ -43,6 +43,7 @@ export interface User {
   password: string
   name: string
   role: Role
+  permissions?: string[]
   created_at: Date
   updated_at: Date
 }

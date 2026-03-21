@@ -46,21 +46,21 @@ export function ProductGrid({ categories, products, onAddToCart }: ProductGridPr
 
   if (categories.length === 0) {
     return (
-      <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-gray-200 bg-white p-6 text-sm text-gray-500">
-        No hay categorias configuradas.
+      <div className="flex h-full items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 p-6 text-sm text-slate-500">
+        No hay categorías configuradas.
       </div>
     )
   }
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="mb-4 relative">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+    <div className="flex flex-col h-full bg-slate-50/30">
+      <div className="mb-5 relative">
+        <div className="relative shadow-sm rounded-2xl">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" strokeWidth={1.5} />
           <Input 
             type="text" 
             placeholder="Buscar productos..." 
-            className="pl-10 h-12 bg-white rounded-xl shadow-sm border-gray-200 text-lg"
+            className="pl-11 h-14 bg-white rounded-2xl border-slate-200/80 text-base shadow-none focus-visible:ring-blue-500 placeholder:text-slate-400"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
@@ -69,7 +69,7 @@ export function ProductGrid({ categories, products, onAddToCart }: ProductGridPr
       
       {!searchQuery ? (
         <Tabs defaultValue={categories[0]?.id.toString()} className="flex flex-col flex-1 h-full min-h-0">
-          <div className="mb-4 overflow-x-auto pb-1">
+          <div className="mb-5 overflow-x-auto pb-2 -mx-1 px-1 custom-scrollbar">
             <TabsList className="h-auto w-max min-w-full justify-start gap-2 bg-transparent p-0 flex-nowrap shrink-0">
               {categories.map((category) => {
                 const Icon = getCategoryIcon(category.name);
@@ -77,9 +77,9 @@ export function ProductGrid({ categories, products, onAddToCart }: ProductGridPr
                   <TabsTrigger
                     key={category.id}
                     value={category.id.toString()}
-                    className="data-[state=active]:bg-blue-500 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-blue-500/25 bg-white border border-gray-200 px-5 py-3 rounded-xl transition-all whitespace-nowrap flex items-center gap-2 font-medium shrink-0"
+                    className="data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md data-[state=active]:border-blue-600 bg-white border border-slate-200/80 text-slate-600 hover:bg-slate-50 px-5 py-3.5 rounded-2xl transition-all whitespace-nowrap flex items-center gap-2.5 font-medium shrink-0"
                   >
-                    <Icon className="h-5 w-5" />
+                    <Icon className="h-5 w-5" strokeWidth={1.5} />
                     {category.name}
                   </TabsTrigger>
                 )
@@ -88,26 +88,28 @@ export function ProductGrid({ categories, products, onAddToCart }: ProductGridPr
           </div>
 
           {categories.map((category) => (
-            <TabsContent key={category.id} value={category.id.toString()} className="mt-0 min-h-0 flex-1 h-full data-[state=inactive]:hidden">
-              <ScrollArea className="h-full pr-4">
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 pb-4">
+            <TabsContent key={category.id} value={category.id.toString()} className="mt-0 min-h-0 flex-1 h-full data-[state=inactive]:hidden focus-visible:outline-none focus-visible:ring-0">
+              <ScrollArea className="h-full pr-4 -mr-4">
+                <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 pb-4">
                   {getProductsByCategory(category.id).map((product) => (
                     <Button
                       key={product.id}
                       onClick={() => onAddToCart(product)}
                       variant="outline"
-                      className="h-auto min-h-[8rem] flex flex-col items-center justify-center gap-2 bg-white hover:bg-blue-50 hover:border-blue-200 border-gray-200 text-gray-800 hover:text-blue-600 transition-all rounded-xl shadow-sm p-3 whitespace-normal"
+                      className="h-auto min-h-36 flex flex-col items-center justify-center gap-3 bg-white hover:bg-slate-50 border-slate-200/80 text-slate-800 hover:text-blue-600 transition-all rounded-2xl shadow-sm hover:shadow-md p-4 whitespace-normal group"
                     >
-                      <div className="h-10 w-10 flex-shrink-0 rounded-full bg-blue-100 flex items-center justify-center text-blue-500 mb-1">
+                      <div className="h-12 w-12 shrink-0 rounded-2xl bg-slate-50 group-hover:bg-blue-50/50 flex items-center justify-center text-slate-500 group-hover:text-blue-600 transition-colors border border-slate-100 group-hover:border-blue-100 mb-1">
                          {(() => {
                            const ProductIcon = getCategoryIcon(category.name);
-                           return <ProductIcon className="h-5 w-5" />
+                           return <ProductIcon className="h-6 w-6" strokeWidth={1.5} />
                          })()}
                       </div>
-                      <span className="font-semibold text-center text-sm leading-tight line-clamp-2">
-                        {product.name}
-                      </span>
-                      <span className="text-lg font-bold text-blue-500">${Number(product.price).toFixed(2)}</span>
+                      <div className="flex flex-col items-center gap-1.5 w-full">
+                        <span className="font-semibold text-center text-sm leading-tight line-clamp-2 w-full text-slate-700 group-hover:text-slate-900 transition-colors">
+                          {product.name}
+                        </span>
+                        <span className="text-lg font-bold text-blue-600">${Number(product.price).toFixed(2)}</span>
+                      </div>
                     </Button>
                   ))}
                 </div>
@@ -116,8 +118,8 @@ export function ProductGrid({ categories, products, onAddToCart }: ProductGridPr
           ))}
         </Tabs>
       ) : (
-        <ScrollArea className="flex-1 h-full min-h-0 pr-4">
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 pb-4">
+        <ScrollArea className="flex-1 h-full min-h-0 pr-4 -mr-4">
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 pb-4">
             {getFilteredProducts().map((product) => {
                const category = categories.find(c => c.id === product.category_id);
                const Icon = category ? getCategoryIcon(category.name) : UtensilsCrossed;
@@ -127,23 +129,26 @@ export function ProductGrid({ categories, products, onAddToCart }: ProductGridPr
                   key={product.id}
                   onClick={() => onAddToCart(product)}
                   variant="outline"
-                  className="h-auto min-h-[8rem] flex flex-col items-center justify-center gap-2 bg-white hover:bg-blue-50 hover:border-blue-200 border-gray-200 text-gray-800 hover:text-blue-600 transition-all rounded-xl shadow-sm p-3 whitespace-normal"
+                  className="h-auto min-h-36 flex flex-col items-center justify-center gap-3 bg-white hover:bg-slate-50 border-slate-200/80 text-slate-800 hover:text-blue-600 transition-all rounded-2xl shadow-sm hover:shadow-md p-4 whitespace-normal group"
                 >
-                  <div className="h-10 w-10 flex-shrink-0 rounded-full bg-blue-100 flex items-center justify-center text-blue-500 mb-1">
-                     <Icon className="h-5 w-5" />
+                  <div className="h-12 w-12 shrink-0 rounded-2xl bg-slate-50 group-hover:bg-blue-50/50 flex items-center justify-center text-slate-500 group-hover:text-blue-600 transition-colors border border-slate-100 group-hover:border-blue-100 mb-1">
+                     <Icon className="h-6 w-6" strokeWidth={1.5} />
                   </div>
-                  <span className="font-semibold text-center text-sm leading-tight line-clamp-2">
-                    {product.name}
-                  </span>
-                  <span className="text-lg font-bold text-blue-500">${Number(product.price).toFixed(2)}</span>
+                  <div className="flex flex-col items-center gap-1.5 w-full">
+                    <span className="font-semibold text-center text-sm leading-tight line-clamp-2 w-full text-slate-700 group-hover:text-slate-900 transition-colors">
+                      {product.name}
+                    </span>
+                    <span className="text-lg font-bold text-blue-600">${Number(product.price).toFixed(2)}</span>
+                  </div>
                 </Button>
               )
             })}
             
             {getFilteredProducts().length === 0 && (
-              <div className="col-span-full py-10 text-center text-gray-500 bg-white rounded-xl border border-dashed border-gray-200">
-                <Search className="h-8 w-8 mx-auto mb-3 text-gray-400 opacity-50" />
-                <p>No se encontraron productos para "{searchQuery}"</p>
+              <div className="col-span-full py-16 flex flex-col items-center justify-center text-center text-slate-500 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200/80 min-h-[50vh]">
+                <Search className="h-10 w-10 mb-4 text-slate-300" strokeWidth={1.5} />
+                <p className="text-base font-medium text-slate-600">No se encontraron productos</p>
+                <p className="text-sm text-slate-400 mt-1">Acerca de &quot;{searchQuery}&quot;</p>
               </div>
             )}
           </div>

@@ -1,7 +1,8 @@
-import type { Supply } from "@/lib/types"
+import type { Expense, Supply } from "@/lib/types"
 import { sql } from "@/lib/db"
 
 const WHATSAPP_API_URL = "https://graph.facebook.com/v18.0"
+const WHATSAPP_MAX_RETRIES = 3
 
 interface WhatsAppResponse {
   messaging_product: string
@@ -54,34 +55,52 @@ export async function sendWhatsAppMessage(
     return { success: false, error: "WhatsApp not configured" }
   }
 
-  try {
-    const response = await fetch(`${WHATSAPP_API_URL}/${phoneNumberId}/messages`, {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        messaging_product: "whatsapp",
-        to: recipientPhone,
-        type: "text",
-        text: { body: message }
+  for (let attempt = 1; attempt <= WHATSAPP_MAX_RETRIES; attempt += 1) {
+    try {
+      const response = await fetch(`${WHATSAPP_API_URL}/${phoneNumberId}/messages`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          messaging_product: "whatsapp",
+          to: recipientPhone,
+          type: "text",
+          text: { body: message }
+        })
       })
-    })
 
-    const data: WhatsAppResponse = await response.json()
+      const data: WhatsAppResponse = await response.json()
 
-    if (data.error) {
-      console.error("[WhatsApp] API Error:", data.error)
-      return { success: false, error: data.error.message }
+      if (response.ok && !data.error) {
+        console.log("[WhatsApp] Message sent successfully:", data.messages?.[0]?.id)
+        return { success: true }
+      }
+
+      const code = data.error?.code
+      const isTransient = response.status === 429 || response.status >= 500 || code === 131000
+      const errorMessage = data.error?.message || `HTTP ${response.status}`
+
+      if (!isTransient || attempt === WHATSAPP_MAX_RETRIES) {
+        console.error("[WhatsApp] API Error:", data.error || errorMessage)
+        return { success: false, error: errorMessage }
+      }
+
+      const delayMs = 700 * attempt
+      await new Promise((resolve) => setTimeout(resolve, delayMs))
+    } catch (error) {
+      if (attempt === WHATSAPP_MAX_RETRIES) {
+        console.error("[WhatsApp] Network error:", error)
+        return { success: false, error: "Network error" }
+      }
+
+      const delayMs = 700 * attempt
+      await new Promise((resolve) => setTimeout(resolve, delayMs))
     }
-
-    console.log("[WhatsApp] Message sent successfully:", data.messages?.[0]?.id)
-    return { success: true }
-  } catch (error) {
-    console.error("[WhatsApp] Network error:", error)
-    return { success: false, error: "Network error" }
   }
+
+  return { success: false, error: "Unknown error" }
 }
 
 /**
@@ -141,6 +160,53 @@ export async function sendInventoryAlert(supplies: Supply[]): Promise<{ success:
 
   const message = formatInventoryAlert(supplies)
 
+  const results = await Promise.all(recipients.map((phone) => sendWhatsAppMessage(message, phone)))
+  const firstError = results.find((r) => !r.success)?.error
+
+  return {
+    success: results.some((r) => r.success),
+    error: firstError,
+  }
+}
+
+type ExpenseNotificationPayload = Pick<Expense, "concept" | "category" | "amount" | "notes"> & {
+  createdBy: string
+}
+
+export function formatExpenseAlert(expense: ExpenseNotificationPayload): string {
+  const now = new Date()
+  const timestamp = now.toLocaleString("es-MX", {
+    hour: "2-digit",
+    minute: "2-digit",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  })
+
+  let message = `*Nuevo Gasto Registrado - El Colegio Invisible*\n\n`
+  message += `*Concepto:* ${expense.concept}\n`
+  message += `*Categoria:* ${expense.category}\n`
+  message += `*Monto:* $${Number(expense.amount).toFixed(2)}\n`
+  message += `*Registrado por:* ${expense.createdBy}\n`
+
+  if (expense.notes?.trim()) {
+    message += `*Notas:* ${expense.notes.trim()}\n`
+  }
+
+  message += `\n_Hora: ${timestamp}_`
+  return message
+}
+
+export async function sendExpenseAlert(
+  expense: ExpenseNotificationPayload
+): Promise<{ success: boolean; error?: string }> {
+  const recipients = await getRecipientPhones()
+  if (recipients.length === 0) {
+    console.log("[WhatsApp] No recipients configured - skipping expense alert")
+    return { success: false, error: "No recipients configured" }
+  }
+
+  const message = formatExpenseAlert(expense)
   const results = await Promise.all(recipients.map((phone) => sendWhatsAppMessage(message, phone)))
   const firstError = results.find((r) => !r.success)?.error
 

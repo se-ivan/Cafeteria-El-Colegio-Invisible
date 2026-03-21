@@ -34,9 +34,13 @@ model User {
   password_hash String
   name          String
   role          Role     @default(CASHIER)
+  permissions   String[] @default([])
   created_at    DateTime @default(now()) @db.Timestamptz
   updated_at    DateTime @default(now()) @updatedAt @db.Timestamptz
   sales         Sale[]
+  expenses      Expense[]
+  cash_sessions CashSession[]
+  withdrawals   CashWithdrawal[]
 
   @@map("users")
 }
@@ -106,12 +110,15 @@ model Sale {
   total          Decimal       @db.Decimal(10, 2)
   payment_method PaymentMethod
   user_id        Int?
+  cash_session_id Int?
   notes          String?
   user           User?         @relation(fields: [user_id], references: [id], onDelete: SetNull)
+  cash_session   CashSession?  @relation(fields: [cash_session_id], references: [id], onDelete: SetNull)
   created_at     DateTime      @default(now()) @db.Timestamptz
   sale_items     SaleItem[]
 
   @@index([user_id], map: "idx_sales_user")
+  @@index([cash_session_id], map: "idx_sales_cash_session")
   @@index([created_at], map: "idx_sales_created")
   @@map("sales")
 }
@@ -139,4 +146,63 @@ model AlertLog {
   sent_at   DateTime @default(now()) @db.Timestamptz
 
   @@map("alert_logs")
+}
+
+model Expense {
+  id         Int      @id @default(autoincrement())
+  user_id    Int?
+  cash_session_id Int?
+  user       User?    @relation(fields: [user_id], references: [id], onDelete: SetNull)
+  cash_session CashSession? @relation(fields: [cash_session_id], references: [id], onDelete: SetNull)
+  concept    String
+  category   String   @default("OPERATIVOS")
+  amount     Decimal  @db.Decimal(10, 2)
+  notes      String?
+  created_at DateTime @default(now()) @db.Timestamptz
+
+  @@index([created_at], map: "idx_expenses_created_at")
+  @@index([category], map: "idx_expenses_category")
+  @@index([cash_session_id], map: "idx_expenses_cash_session")
+  @@map("expenses")
+}
+
+model CashSession {
+  id               Int            @id @default(autoincrement())
+  user_id          Int
+  user             User           @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  status           String         @default("OPEN")
+  opening_amount   Decimal        @db.Decimal(10, 2)
+  opening_notes    String?
+  opened_at        DateTime       @default(now()) @db.Timestamptz
+  closing_amount   Decimal?       @db.Decimal(10, 2)
+  closing_notes    String?
+  closed_at        DateTime?      @db.Timestamptz
+  expected_cash    Decimal?       @db.Decimal(10, 2)
+  cash_sales_total Decimal?       @db.Decimal(10, 2)
+  card_sales_total Decimal?       @db.Decimal(10, 2)
+  expenses_total   Decimal?       @db.Decimal(10, 2)
+  withdrawals_total Decimal?      @db.Decimal(10, 2)
+  sales            Sale[]
+  expenses         Expense[]
+  withdrawals      CashWithdrawal[]
+
+  @@index([user_id], map: "idx_cash_sessions_user")
+  @@index([status], map: "idx_cash_sessions_status")
+  @@index([opened_at], map: "idx_cash_sessions_opened_at")
+  @@map("cash_sessions")
+}
+
+model CashWithdrawal {
+  id          Int         @id @default(autoincrement())
+  session_id  Int
+  session     CashSession @relation(fields: [session_id], references: [id], onDelete: Cascade)
+  user_id     Int?
+  user        User?       @relation(fields: [user_id], references: [id], onDelete: SetNull)
+  amount      Decimal     @db.Decimal(10, 2)
+  reason      String
+  created_at  DateTime    @default(now()) @db.Timestamptz
+
+  @@index([session_id], map: "idx_cash_withdrawals_session")
+  @@index([created_at], map: "idx_cash_withdrawals_created_at")
+  @@map("cash_withdrawals")
 }

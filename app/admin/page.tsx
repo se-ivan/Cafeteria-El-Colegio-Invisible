@@ -1,9 +1,17 @@
 import { AdminDashboardPanel } from "@/components/admin/admin-dashboard-panel"
+import { auth } from "@/lib/auth"
+import { hasPermission, PERMISSION_IDS } from "@/lib/permissions"
 import { getAdminDashboardData } from "@/lib/queries"
+import { redirect } from "next/navigation"
 
 export const dynamic = "force-dynamic"
 
 export default async function AdminPage() {
+  const session = await auth()
+  if (!session?.user?.id || !hasPermission(session.user, PERMISSION_IDS.ADMIN_DASHBOARD)) {
+    redirect("/pos")
+  }
+
   const data = await getAdminDashboardData()
 
   return (

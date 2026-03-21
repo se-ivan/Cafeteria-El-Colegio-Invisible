@@ -1,11 +1,19 @@
 import { getSupplies, getLowStockSupplies } from "@/lib/queries"
+import { auth } from "@/lib/auth"
+import { hasPermission, PERMISSION_IDS } from "@/lib/permissions"
 import { InventoryTable } from "@/components/admin/inventory-table"
 import { AddSupplyDialog } from "@/components/admin/add-supply-dialog"
+import { redirect } from "next/navigation"
 import { Package, AlertTriangle, CheckCircle } from "lucide-react"
 
 export const dynamic = "force-dynamic"
 
 export default async function InventoryPage() {
+  const session = await auth()
+  if (!session?.user?.id || !hasPermission(session.user, PERMISSION_IDS.INVENTORY_MANAGE)) {
+    redirect("/pos")
+  }
+
   const [supplies, lowStockSupplies] = await Promise.all([
     getSupplies(),
     getLowStockSupplies()

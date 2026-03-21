@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
-  
+
   // Get the session token from cookies
-  const sessionToken = request.cookies.get("authjs.session-token")?.value ||
-                       request.cookies.get("__Secure-authjs.session-token")?.value
-  
+  const sessionToken =
+    request.cookies.get("authjs.session-token")?.value ||
+    request.cookies.get("__Secure-authjs.session-token")?.value
+
   const isAuthenticated = !!sessionToken
 
   // Public routes - allow access
@@ -30,5 +31,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon|apple-icon).*)"]
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon|apple-icon).*)"],
 }

@@ -106,7 +106,7 @@ export function AddProductDialog({ categories }: AddProductDialogProps) {
                         type="button"
                         onClick={() => setFormData({ ...formData, categoryId: category.id.toString() })}
                         className={cn(
-                          "flex flex-col items-center justify-center gap-2 p-3 min-h-[5rem] rounded-xl border-2 transition-all duration-200",
+                          "flex flex-col items-center justify-center gap-2 p-3 min-h-20 rounded-xl border-2 transition-all duration-200",
                           isSelected 
                             ? "border-blue-300 bg-blue-50 shadow-md scale-[1.02]" 
                             : "border-slate-100 bg-white hover:border-slate-200 hover:bg-slate-50 hover:scale-[1.02] text-slate-500"

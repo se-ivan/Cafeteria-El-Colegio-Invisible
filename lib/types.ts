@@ -2,6 +2,16 @@
 export type UserRole = 'ADMIN' | 'CASHIER'
 export type PaymentMethod = 'CASH' | 'CARD'
 export type SupplyStatus = 'OK' | 'LOW' | 'OUT'
+export type AppPermission =
+  | 'ADMIN_DASHBOARD'
+  | 'INVENTORY_MANAGE'
+  | 'PRODUCTS_MANAGE'
+  | 'SALES_VIEW'
+  | 'EXPENSES_MANAGE'
+  | 'REPORTS_VIEW'
+  | 'SETTINGS_MANAGE'
+  | 'POS_ACCESS'
+  | 'CASH_SESSION_EXPORT'
 
 export interface User {
   id: number
@@ -9,6 +19,7 @@ export interface User {
   password_hash: string
   name: string
   role: UserRole
+  permissions?: AppPermission[]
   created_at: Date
   updated_at: Date
 }
@@ -81,6 +92,50 @@ export interface AlertLog {
   sent_at: Date
 }
 
+export interface Expense {
+  id: number
+  user_id: number | null
+  concept: string
+  category: string
+  amount: number
+  notes: string | null
+  created_at: Date
+  user_name?: string | null
+}
+
+export interface TodayExpenses {
+  total: number
+  count: number
+}
+
+export type CashSessionStatus = "OPEN" | "CLOSED"
+
+export interface CashSession {
+  id: number
+  user_id: number
+  status: CashSessionStatus
+  opening_amount: number
+  opening_notes: string | null
+  opened_at: Date
+  closing_amount: number | null
+  closing_notes: string | null
+  closed_at: Date | null
+  expected_cash: number | null
+  cash_sales_total: number | null
+  card_sales_total: number | null
+  expenses_total: number | null
+  withdrawals_total: number | null
+}
+
+export interface CashWithdrawal {
+  id: number
+  session_id: number
+  user_id: number | null
+  amount: number
+  reason: string
+  created_at: Date
+}
+
 // Cart types for POS
 export interface CartItem {
   product: Product
@@ -93,6 +148,7 @@ export interface SessionUser {
   email: string
   name: string
   role: UserRole
+  permissions: AppPermission[]
 }
 
 export interface WorkerUser {
@@ -100,6 +156,7 @@ export interface WorkerUser {
   email: string
   name: string
   role: UserRole
+  permissions: AppPermission[]
   created_at: Date
 }
 

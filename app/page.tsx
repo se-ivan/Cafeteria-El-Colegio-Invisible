@@ -1,4 +1,5 @@
 import { auth } from "@/lib/auth"
+import { canAccessAdminArea, hasPermission, PERMISSION_IDS } from "@/lib/permissions"
 import { redirect } from "next/navigation"
 
 export default async function HomePage() {
@@ -8,10 +9,13 @@ export default async function HomePage() {
     redirect("/login")
   }
   
-  // Redirect based on role
-  if (session.user.role === "ADMIN") {
+  if (canAccessAdminArea(session.user)) {
     redirect("/admin/inventory")
-  } else {
+  }
+
+  if (hasPermission(session.user, PERMISSION_IDS.POS_ACCESS)) {
     redirect("/pos")
   }
+
+  redirect("/login")
 }

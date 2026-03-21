@@ -53,15 +53,19 @@ import {
 type DashboardKpis = {
   todaySalesTotal: number
   todaySalesCount: number
+  todayExpensesTotal: number
   monthSalesTotal: number
   monthSalesCount: number
+  monthExpensesTotal: number
+  monthNetTotal: number
   activeSellers: number
   lowStockSupplies: number
 }
 
 type DashboardChartPoint = {
   day: string
-  total: number
+  sales: number
+  expenses: number
 }
 
 type DashboardSellerPerformance = {
@@ -285,14 +289,42 @@ export function AdminDashboardPanel({
         <Card className="border-slate-100 shadow-sm relative overflow-hidden">
           <CardContent className="p-5">
             <div className="flex items-center justify-between pb-4">
-              <p className="text-[13px] font-medium text-slate-500 uppercase tracking-wider">Alertas</p>
-              <div className="rounded-full bg-red-50 p-2.5">
-                <AlertTriangle className="h-4 w-4 text-red-500" />
+              <p className="text-[13px] font-medium text-slate-500 uppercase tracking-wider">Gastos hoy</p>
+              <div className="rounded-full bg-blue-50 p-2.5">
+                <CreditCard className="h-4 w-4 text-blue-500" />
               </div>
             </div>
             <div className="flex flex-col gap-1">
-              <p className="text-3xl font-semibold text-slate-900 tracking-tight">{kpis.lowStockSupplies}</p>
-              <p className="text-xs font-medium text-slate-400">insumos con stock bajo</p>
+              <p className="text-3xl font-semibold text-slate-900 tracking-tight">{formatMoney(kpis.todayExpensesTotal)}</p>
+              <p className="text-xs font-medium text-slate-400">egresos del día</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <Card className="border-slate-100 shadow-sm relative overflow-hidden">
+          <CardContent className="p-5">
+            <p className="text-[13px] font-medium text-slate-500 uppercase tracking-wider mb-2">Gastos mes</p>
+            <p className="text-2xl font-semibold text-slate-900 tracking-tight">{formatMoney(kpis.monthExpensesTotal)}</p>
+          </CardContent>
+        </Card>
+        <Card className="border-slate-100 shadow-sm relative overflow-hidden">
+          <CardContent className="p-5">
+            <p className="text-[13px] font-medium text-slate-500 uppercase tracking-wider mb-2">Neto mes</p>
+            <p className="text-2xl font-semibold text-slate-900 tracking-tight">{formatMoney(kpis.monthNetTotal)}</p>
+          </CardContent>
+        </Card>
+        <Card className="border-slate-100 shadow-sm relative overflow-hidden">
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-[13px] font-medium text-slate-500 uppercase tracking-wider mb-2">Alertas inventario</p>
+                <p className="text-2xl font-semibold text-slate-900 tracking-tight">{kpis.lowStockSupplies}</p>
+              </div>
+              <div className="rounded-full bg-red-50 p-2.5">
+                <AlertTriangle className="h-4 w-4 text-red-500" />
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -309,8 +341,8 @@ export function AdminDashboardPanel({
           <div className="grid gap-4 lg:grid-cols-2">
             <Card className="border-slate-100 shadow-sm">
               <CardHeader>
-                <CardTitle className="text-lg text-slate-800">Ventas por día (últimos 14 días)</CardTitle>
-                <CardDescription>Evolución de ingresos diarios.</CardDescription>
+                <CardTitle className="text-lg text-slate-800">Ventas vs gastos (últimos 14 días)</CardTitle>
+                <CardDescription>Comparativo diario de ingresos y egresos.</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="h-72 w-full">
@@ -320,10 +352,11 @@ export function AdminDashboardPanel({
                       <XAxis dataKey="day" tickLine={false} axisLine={false} stroke="#94a3b8" fontSize={12} />
                       <YAxis tickLine={false} axisLine={false} stroke="#94a3b8" fontSize={12} tickFormatter={(v) => `$${v}`} />
                       <Tooltip 
-                        formatter={(value: number) => [formatMoney(value), "Ventas"]}
+                        formatter={(value: number, name) => [formatMoney(value), name === "sales" ? "Ventas" : "Gastos"]}
                         contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 1px 2px 0 rgb(0 0 0 / 0.05)' }}
                       />
-                      <Line type="monotone" dataKey="total" stroke="#3b82f6" strokeWidth={3} dot={{ r: 4, fill: '#3b82f6', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 6 }} />
+                      <Line type="monotone" dataKey="sales" stroke="#3b82f6" strokeWidth={3} dot={{ r: 4, fill: '#3b82f6', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 6 }} />
+                      <Line type="monotone" dataKey="expenses" stroke="#ef4444" strokeWidth={2.5} dot={{ r: 3, fill: '#ef4444', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 5 }} />
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
@@ -378,7 +411,7 @@ export function AdminDashboardPanel({
                   <CardTitle className="text-lg text-slate-800">Registrar nuevo miembro</CardTitle>
                 </div>
               </div>
-              <CardDescription className="ml-[44px]">Crear usuarios administrativos o cajeros desde este panel.</CardDescription>
+              <CardDescription className="ml-11">Crear usuarios administrativos o cajeros desde este panel.</CardDescription>
             </CardHeader>
             <CardContent className="pl-8">
               <form onSubmit={createMember} className="grid gap-4 lg:grid-cols-2">
@@ -509,7 +542,7 @@ export function AdminDashboardPanel({
                   <CardTitle className="text-lg text-slate-800">Ranking de vendedores</CardTitle>
                 </div>
               </div>
-              <CardDescription className="ml-[44px]">Rendimiento de los últimos 30 días.</CardDescription>
+              <CardDescription className="ml-11">Rendimiento de los últimos 30 días.</CardDescription>
             </CardHeader>
             <CardContent>
               {sellerPerformance.length === 0 ? (
@@ -550,7 +583,7 @@ export function AdminDashboardPanel({
                   <CardTitle className="text-lg text-slate-800">Comparativo por vendedor</CardTitle>
                 </div>
               </div>
-              <CardDescription className="ml-[44px]">Ventas e ingresos por usuario.</CardDescription>
+              <CardDescription className="ml-11">Ventas e ingresos por usuario.</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="h-72 w-full">

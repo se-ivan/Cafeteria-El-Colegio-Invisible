@@ -9,7 +9,15 @@ import { CheckoutDialog } from "@/components/pos/checkout-dialog"
 import { POSAlerts } from "@/components/pos/pos-alerts"
 import { processSale } from "@/lib/actions"
 import { toast } from "sonner"
-import type { Category, Product, CartItem, PaymentMethod, Supply } from "@/lib/types"
+import type {
+  Category,
+  Product,
+  CartItem,
+  PaymentMethod,
+  Supply,
+  CashSession,
+  CashWithdrawal,
+} from "@/lib/types"
 
 interface POSClientProps {
   categories: Category[]
@@ -17,6 +25,16 @@ interface POSClientProps {
   todaySales: { total: number; count: number }
   salesBreakdown: { cashTotal: number; cardTotal: number; tickets: number }
   lowStockSupplies: Supply[]
+  canManageInventory: boolean
+  openCashSession: CashSession | null
+  cashSessionSummary: {
+    cashSalesTotal: number
+    cardSalesTotal: number
+    expensesTotal: number
+    withdrawalsTotal: number
+    expectedCash: number
+  } | null
+  cashWithdrawals: CashWithdrawal[]
 }
 
 export function POSClient({
@@ -25,6 +43,10 @@ export function POSClient({
   todaySales,
   salesBreakdown,
   lowStockSupplies,
+  canManageInventory,
+  openCashSession,
+  cashSessionSummary,
+  cashWithdrawals,
 }: POSClientProps) {
   const router = useRouter()
   const [cart, setCart] = useState<CartItem[]>([])
@@ -83,8 +105,11 @@ export function POSClient({
       router.refresh()
     } catch (error) {
       console.error("Checkout error:", error)
+      const description = error instanceof Error
+        ? error.message
+        : "Revisa la conexion y vuelve a intentar."
       toast.error("No se pudo completar la venta", {
-        description: "Revisa la conexion y vuelve a intentar.",
+        description,
       })
       throw error
     }
@@ -92,7 +117,14 @@ export function POSClient({
 
   return (
     <div className="flex h-dvh flex-col bg-gray-50">
-      <POSHeader todaySales={todaySales} salesBreakdown={salesBreakdown} />
+      <POSHeader
+        todaySales={todaySales}
+        salesBreakdown={salesBreakdown}
+        canManageInventory={canManageInventory}
+        openCashSession={openCashSession}
+        cashSessionSummary={cashSessionSummary}
+        cashWithdrawals={cashWithdrawals}
+      />
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
         {/* Product Grid */}

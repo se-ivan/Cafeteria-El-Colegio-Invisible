@@ -3,10 +3,17 @@
 import { sql } from "@/lib/db"
 import { auth } from "@/lib/auth"
 import { revalidatePath } from "next/cache"
-import type { PaymentMethod, SupplyStatus, CartItem, Supply, RecipeItem } from "@/lib/types"
-import { sendInventoryAlert } from "@/lib/whatsapp"
+import type { AppPermission, PaymentMethod, SupplyStatus, CartItem, Supply, RecipeItem, UserRole } from "@/lib/types"
+import { sendExpenseAlert, sendInventoryAlert } from "@/lib/whatsapp"
 import { hash } from "bcryptjs"
 import { getRecipeByProduct as dbGetRecipeByProduct } from "@/lib/queries"
+import {
+  ensureUserPermissionsColumn,
+  hasPermission,
+  PERMISSION_IDS,
+  permissionsForRole,
+  sanitizePermissions,
+} from "@/lib/permissions"
 
 const WORKER_EMAIL_DOMAIN = "@elcolegioinvisible.com"
 
@@ -21,11 +28,120 @@ async function ensureWhatsAppRecipientsTable() {
   `)
 }
 
+async function ensureExpensesTable() {
+  await sql(`
+    CREATE TABLE IF NOT EXISTS expenses (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      concept TEXT NOT NULL,
+      category TEXT NOT NULL DEFAULT 'OPERATIVOS',
+      amount DECIMAL(10,2) NOT NULL,
+      notes TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `)
+
+  await sql(`
+    CREATE INDEX IF NOT EXISTS idx_expenses_created_at ON expenses(created_at DESC)
+  `)
+
+  await sql(`
+    ALTER TABLE expenses
+    ADD COLUMN IF NOT EXISTS cash_session_id INTEGER
+  `)
+
+  await sql(`
+    DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1
+        FROM information_schema.tables
+        WHERE table_schema = 'public' AND table_name = 'cash_sessions'
+      ) AND NOT EXISTS (
+        SELECT 1
+        FROM information_schema.table_constraints
+        WHERE constraint_schema = 'public'
+          AND table_name = 'expenses'
+          AND constraint_name = 'expenses_cash_session_id_fkey'
+      ) THEN
+        ALTER TABLE expenses
+        ADD CONSTRAINT expenses_cash_session_id_fkey
+        FOREIGN KEY (cash_session_id) REFERENCES cash_sessions(id) ON DELETE SET NULL;
+      END IF;
+    END
+    $$
+  `)
+}
+
+async function ensureCashSessionTables() {
+  await sql(`
+    CREATE TABLE IF NOT EXISTS cash_sessions (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      status TEXT NOT NULL DEFAULT 'OPEN',
+      opening_amount DECIMAL(10,2) NOT NULL,
+      opening_notes TEXT,
+      opened_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      closing_amount DECIMAL(10,2),
+      closing_notes TEXT,
+      closed_at TIMESTAMPTZ,
+      expected_cash DECIMAL(10,2),
+      cash_sales_total DECIMAL(10,2),
+      card_sales_total DECIMAL(10,2),
+      expenses_total DECIMAL(10,2),
+      withdrawals_total DECIMAL(10,2)
+    )
+  `)
+
+  await sql(`
+    CREATE TABLE IF NOT EXISTS cash_withdrawals (
+      id SERIAL PRIMARY KEY,
+      session_id INTEGER NOT NULL REFERENCES cash_sessions(id) ON DELETE CASCADE,
+      user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      amount DECIMAL(10,2) NOT NULL,
+      reason TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `)
+
+  await sql(`
+    CREATE INDEX IF NOT EXISTS idx_cash_sessions_user ON cash_sessions(user_id)
+  `)
+
+  await sql(`
+    CREATE INDEX IF NOT EXISTS idx_cash_sessions_status ON cash_sessions(status)
+  `)
+
+  await sql(`
+    CREATE INDEX IF NOT EXISTS idx_cash_withdrawals_session ON cash_withdrawals(session_id)
+  `)
+
+  await sql(`
+    ALTER TABLE sales
+    ADD COLUMN IF NOT EXISTS cash_session_id INTEGER REFERENCES cash_sessions(id) ON DELETE SET NULL
+  `)
+
+  await sql(`
+    CREATE INDEX IF NOT EXISTS idx_sales_cash_session ON sales(cash_session_id)
+  `)
+
+  await ensureExpensesTable()
+}
+
 // Helper to calculate supply status
 function calculateStatus(currentStock: number, minStock: number): SupplyStatus {
   if (currentStock <= 0) return "OUT"
   if (currentStock <= minStock) return "LOW"
   return "OK"
+}
+
+function assertPermission(
+  session: Awaited<ReturnType<typeof auth>>,
+  permission: AppPermission
+) {
+  if (!session?.user || !hasPermission(session.user, permission)) {
+    throw new Error("No autorizado")
+  }
 }
 
 // Get recipe items for a product (used by client components)
@@ -52,12 +168,29 @@ export async function processSale(
   const total = items.reduce((sum, item) => sum + (item.product.price * item.quantity), 0)
 
   try {
+    await ensureCashSessionTables()
+
+    const openSession = await sql(
+      `SELECT id
+       FROM cash_sessions
+       WHERE user_id = $1 AND status = 'OPEN'
+       ORDER BY opened_at DESC
+       LIMIT 1`,
+      [userId]
+    ) as { id: number }[]
+
+    if (openSession.length === 0) {
+      throw new Error("Debes abrir una sesión de caja antes de registrar ventas")
+    }
+
+    const cashSessionId = openSession[0].id
+
     // Create the sale
     const saleResult = await sql(
-      `INSERT INTO sales (user_id, total, payment_method, notes)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO sales (user_id, cash_session_id, total, payment_method, notes)
+       VALUES ($1, $2, $3, $4, $5)
        RETURNING id`,
-      [userId, total, paymentMethod, notes || null]
+      [userId, cashSessionId, total, paymentMethod, notes || null]
     ) as { id: number }[]
     const saleId = saleResult[0].id
 
@@ -166,9 +299,7 @@ export async function processSale(
 // Update supply stock
 export async function updateSupplyStock(supplyId: number, newStock: number) {
   const session = await auth()
-  if (!session?.user || session.user.role !== "ADMIN") {
-    throw new Error("No autorizado")
-  }
+  assertPermission(session, PERMISSION_IDS.INVENTORY_MANAGE)
 
   try {
     const supply = await sql("SELECT min_stock FROM supplies WHERE id = $1", [supplyId]) as { min_stock: number }[]
@@ -197,9 +328,7 @@ export async function updateSupplyStock(supplyId: number, newStock: number) {
 // Update supply min stock (threshold)
 export async function updateSupplyMinStock(supplyId: number, newMinStock: number) {
   const session = await auth()
-  if (!session?.user || session.user.role !== "ADMIN") {
-    throw new Error("No autorizado")
-  }
+  assertPermission(session, PERMISSION_IDS.INVENTORY_MANAGE)
 
   try {
     const supply = await sql("SELECT current_stock FROM supplies WHERE id = $1", [supplyId]) as { current_stock: number }[]
@@ -234,9 +363,7 @@ export async function createSupply(data: {
   minStock: number
 }) {
   const session = await auth()
-  if (!session?.user || session.user.role !== "ADMIN") {
-    throw new Error("No autorizado")
-  }
+  assertPermission(session, PERMISSION_IDS.INVENTORY_MANAGE)
 
   const status = calculateStatus(data.currentStock, data.minStock)
 
@@ -258,9 +385,7 @@ export async function createSupply(data: {
 // Delete supply
 export async function deleteSupply(supplyId: number) {
   const session = await auth()
-  if (!session?.user || session.user.role !== "ADMIN") {
-    throw new Error("No autorizado")
-  }
+  assertPermission(session, PERMISSION_IDS.INVENTORY_MANAGE)
 
   try {
     await sql("DELETE FROM supplies WHERE id = $1", [supplyId])
@@ -280,9 +405,7 @@ export async function updateProduct(productId: number, data: {
   isActive: boolean
 }) {
   const session = await auth()
-  if (!session?.user || session.user.role !== "ADMIN") {
-    throw new Error("No autorizado")
-  }
+  assertPermission(session, PERMISSION_IDS.PRODUCTS_MANAGE)
 
   try {
     await sql(
@@ -308,9 +431,7 @@ export async function createProduct(data: {
   categoryId: number
 }) {
   const session = await auth()
-  if (!session?.user || session.user.role !== "ADMIN") {
-    throw new Error("No autorizado")
-  }
+  assertPermission(session, PERMISSION_IDS.PRODUCTS_MANAGE)
 
   try {
     await sql(
@@ -331,9 +452,7 @@ export async function createProduct(data: {
 // Update recipe for a product
 export async function updateRecipe(productId: number, items: { supplyId: number; quantity: number }[]) {
   const session = await auth()
-  if (!session?.user || session.user.role !== "ADMIN") {
-    throw new Error("No autorizado")
-  }
+  assertPermission(session, PERMISSION_IDS.PRODUCTS_MANAGE)
 
   try {
     // Delete existing recipe items
@@ -361,12 +480,11 @@ export async function createWorker(data: {
   name: string
   emailLocalPart: string
   password: string
-  role: "ADMIN" | "CASHIER"
+  role: UserRole
+  permissions: AppPermission[]
 }) {
   const session = await auth()
-  if (!session?.user || session.user.role !== "ADMIN") {
-    throw new Error("No autorizado")
-  }
+  assertPermission(session, PERMISSION_IDS.SETTINGS_MANAGE)
 
   const localPart = data.emailLocalPart.trim().toLowerCase().split("@")[0]
   if (!localPart) {
@@ -377,15 +495,18 @@ export async function createWorker(data: {
     throw new Error("La contrasena debe tener al menos 6 caracteres")
   }
 
+  await ensureUserPermissionsColumn()
+
   const email = `${localPart}${WORKER_EMAIL_DOMAIN}`
+  const safePermissions = permissionsForRole(data.role, sanitizePermissions(data.permissions))
 
   try {
     const passwordHash = await hash(data.password, 10)
 
     await sql(
-      `INSERT INTO users (email, password_hash, name, role)
-       VALUES ($1, $2, $3, $4)`,
-      [email, passwordHash, data.name.trim(), data.role]
+      `INSERT INTO users (email, password_hash, name, role, permissions)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [email, passwordHash, data.name.trim(), data.role, safePermissions]
     )
 
     revalidatePath("/admin/settings")
@@ -398,9 +519,7 @@ export async function createWorker(data: {
 
 export async function removeWorker(workerId: number) {
   const session = await auth()
-  if (!session?.user || session.user.role !== "ADMIN") {
-    throw new Error("No autorizado")
-  }
+  assertPermission(session, PERMISSION_IDS.SETTINGS_MANAGE)
 
   const currentUserId = parseInt(session.user.id, 10)
   if (workerId === currentUserId) {
@@ -417,12 +536,46 @@ export async function removeWorker(workerId: number) {
   }
 }
 
+export async function updateWorkerAccess(
+  workerId: number,
+  data: { role: UserRole; permissions: AppPermission[] }
+) {
+  const session = await auth()
+  assertPermission(session, PERMISSION_IDS.SETTINGS_MANAGE)
+
+  const currentUserId = parseInt(session!.user.id, 10)
+  if (workerId === currentUserId) {
+    throw new Error("No puedes modificar tu propio acceso")
+  }
+
+  if (data.role !== "ADMIN" && data.role !== "CASHIER") {
+    throw new Error("Rol invalido")
+  }
+
+  await ensureUserPermissionsColumn()
+  const safePermissions = permissionsForRole(data.role, sanitizePermissions(data.permissions))
+
+  try {
+    await sql(
+      `UPDATE users
+       SET role = $1, permissions = $2, updated_at = NOW()
+       WHERE id = $3`,
+      [data.role, safePermissions, workerId]
+    )
+
+    revalidatePath("/admin/settings")
+    revalidatePath("/admin")
+    return { success: true }
+  } catch (error) {
+    console.error("Error updating worker access:", error)
+    throw new Error("No se pudo actualizar el acceso del trabajador")
+  }
+}
+
 // Settings - WhatsApp recipients
 export async function addAlertRecipient(phone: string) {
   const session = await auth()
-  if (!session?.user || session.user.role !== "ADMIN") {
-    throw new Error("No autorizado")
-  }
+  assertPermission(session, PERMISSION_IDS.SETTINGS_MANAGE)
 
   const normalizedPhone = phone.replace(/\s+/g, "")
   if (!/^\+\d{8,15}$/.test(normalizedPhone)) {
@@ -450,9 +603,7 @@ export async function addAlertRecipient(phone: string) {
 
 export async function removeAlertRecipient(recipientId: number) {
   const session = await auth()
-  if (!session?.user || session.user.role !== "ADMIN") {
-    throw new Error("No autorizado")
-  }
+  assertPermission(session, PERMISSION_IDS.SETTINGS_MANAGE)
 
   await ensureWhatsAppRecipientsTable()
 
@@ -470,12 +621,11 @@ export async function createAdminMember(data: {
   name: string
   email: string
   password: string
-  role: "ADMIN" | "CASHIER"
+  role: UserRole
+  permissions?: AppPermission[]
 }) {
   const session = await auth()
-  if (!session?.user || session.user.role !== "ADMIN") {
-    throw new Error("No autorizado")
-  }
+  assertPermission(session, PERMISSION_IDS.SETTINGS_MANAGE)
 
   const name = data.name.trim()
   const email = data.email.trim().toLowerCase()
@@ -497,13 +647,16 @@ export async function createAdminMember(data: {
     throw new Error("Rol invalido")
   }
 
+  await ensureUserPermissionsColumn()
+  const safePermissions = permissionsForRole(data.role, sanitizePermissions(data.permissions || []))
+
   try {
     const passwordHash = await hash(password, 10)
 
     await sql(
-      `INSERT INTO users (email, password_hash, name, role)
-       VALUES ($1, $2, $3, $4)`,
-      [email, passwordHash, name, data.role]
+      `INSERT INTO users (email, password_hash, name, role, permissions)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [email, passwordHash, name, data.role, safePermissions]
     )
 
     revalidatePath("/admin")
@@ -517,9 +670,7 @@ export async function createAdminMember(data: {
 
 export async function resetMemberPassword(userId: number, newPassword: string) {
   const session = await auth()
-  if (!session?.user || session.user.role !== "ADMIN") {
-    throw new Error("No autorizado")
-  }
+  assertPermission(session, PERMISSION_IDS.SETTINGS_MANAGE)
 
   const safePassword = newPassword.trim()
   if (safePassword.length < 6) {
@@ -542,5 +693,279 @@ export async function resetMemberPassword(userId: number, newPassword: string) {
   } catch (error) {
     console.error("Error resetting member password:", error)
     throw new Error("No se pudo restablecer la contrasena")
+  }
+}
+
+export async function createExpense(data: {
+  concept: string
+  category: string
+  amount: number
+  notes?: string
+}) {
+  const session = await auth()
+  if (!session?.user?.id) {
+    throw new Error("No autorizado")
+  }
+
+  const concept = data.concept.trim()
+  const category = data.category.trim() || "OPERATIVOS"
+  const amount = Number(data.amount)
+  const notes = data.notes?.trim() || null
+
+  if (!concept) {
+    throw new Error("El concepto es obligatorio")
+  }
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error("El monto debe ser mayor a 0")
+  }
+
+  await ensureExpensesTable()
+  await ensureCashSessionTables()
+
+  const userId = parseInt(session.user.id, 10)
+
+  try {
+    const openSession = await sql(
+      `SELECT id
+       FROM cash_sessions
+       WHERE user_id = $1 AND status = 'OPEN'
+       ORDER BY opened_at DESC
+       LIMIT 1`,
+      [userId]
+    ) as { id: number }[]
+
+    const cashSessionId = openSession[0]?.id || null
+
+    const rows = await sql(
+      `INSERT INTO expenses (user_id, cash_session_id, concept, category, amount, notes)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id`,
+      [userId, cashSessionId, concept, category, amount, notes]
+    ) as { id: number }[]
+
+    await sendExpenseAlert({
+      concept,
+      category,
+      amount,
+      notes,
+      createdBy: session.user.name || session.user.email || "Usuario",
+    })
+
+    revalidatePath("/admin")
+    revalidatePath("/admin/expenses")
+
+    return { success: true, id: rows[0]?.id }
+  } catch (error) {
+    console.error("Error creating expense:", error)
+    throw new Error("No se pudo registrar el gasto")
+  }
+}
+
+export async function openCashSession(data: { openingAmount: number; notes?: string }) {
+  const session = await auth()
+  if (!session?.user?.id) {
+    throw new Error("No autorizado")
+  }
+
+  const userId = parseInt(session.user.id, 10)
+  const openingAmount = Number(data.openingAmount)
+  const notes = data.notes?.trim() || null
+
+  if (!Number.isFinite(openingAmount) || openingAmount < 0) {
+    throw new Error("El monto de apertura debe ser mayor o igual a 0")
+  }
+
+  await ensureCashSessionTables()
+
+  const existingOpen = await sql(
+    `SELECT id FROM cash_sessions WHERE user_id = $1 AND status = 'OPEN' LIMIT 1`,
+    [userId]
+  ) as { id: number }[]
+
+  if (existingOpen.length > 0) {
+    throw new Error("Ya tienes una sesión de caja abierta")
+  }
+
+  const rows = await sql(
+    `INSERT INTO cash_sessions (user_id, status, opening_amount, opening_notes)
+     VALUES ($1, 'OPEN', $2, $3)
+     RETURNING id`,
+    [userId, openingAmount, notes]
+  ) as { id: number }[]
+
+  revalidatePath("/pos")
+  return { success: true, sessionId: rows[0]?.id }
+}
+
+export async function registerCashWithdrawal(data: { amount: number; reason: string }) {
+  const session = await auth()
+  if (!session?.user?.id) {
+    throw new Error("No autorizado")
+  }
+
+  const userId = parseInt(session.user.id, 10)
+  const amount = Number(data.amount)
+  const reason = data.reason.trim()
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error("El retiro debe ser mayor a 0")
+  }
+
+  if (!reason) {
+    throw new Error("Debes indicar el motivo del retiro")
+  }
+
+  await ensureCashSessionTables()
+
+  const openSession = await sql(
+    `SELECT id
+     FROM cash_sessions
+     WHERE user_id = $1 AND status = 'OPEN'
+     ORDER BY opened_at DESC
+     LIMIT 1`,
+    [userId]
+  ) as { id: number }[]
+
+  if (openSession.length === 0) {
+    throw new Error("No hay sesión de caja abierta para registrar retiros")
+  }
+
+  await sql(
+    `INSERT INTO cash_withdrawals (session_id, user_id, amount, reason)
+     VALUES ($1, $2, $3, $4)`,
+    [openSession[0].id, userId, amount, reason]
+  )
+
+  revalidatePath("/pos")
+  return { success: true }
+}
+
+export async function closeCashSession(data: { closingAmount: number; notes?: string }) {
+  const session = await auth()
+  if (!session?.user?.id) {
+    throw new Error("No autorizado")
+  }
+
+  const userId = parseInt(session.user.id, 10)
+  const closingAmount = Number(data.closingAmount)
+  const notes = data.notes?.trim() || null
+
+  if (!Number.isFinite(closingAmount) || closingAmount < 0) {
+    throw new Error("El cierre debe ser mayor o igual a 0")
+  }
+
+  await ensureCashSessionTables()
+
+  const openRows = await sql(
+    `SELECT id, opening_amount, opened_at
+     FROM cash_sessions
+     WHERE user_id = $1 AND status = 'OPEN'
+     ORDER BY opened_at DESC
+     LIMIT 1`,
+    [userId]
+  ) as { id: number; opening_amount: string; opened_at: Date }[]
+
+  if (openRows.length === 0) {
+    throw new Error("No hay sesión de caja abierta")
+  }
+
+  const openSession = openRows[0]
+
+  const [sales, expenses, withdrawals] = await Promise.all([
+    sql(
+      `SELECT
+        COALESCE(SUM(CASE WHEN payment_method = 'CASH' THEN total ELSE 0 END), 0) AS cash_total,
+        COALESCE(SUM(CASE WHEN payment_method = 'CARD' THEN total ELSE 0 END), 0) AS card_total
+       FROM sales
+       WHERE cash_session_id = $1`,
+      [openSession.id]
+    ) as { cash_total: string; card_total: string }[],
+    sql(
+      `SELECT COALESCE(SUM(amount), 0) AS total
+       FROM expenses
+       WHERE cash_session_id = $1`,
+      [openSession.id]
+    ) as { total: string }[],
+    sql(
+      `SELECT COALESCE(SUM(amount), 0) AS total
+       FROM cash_withdrawals
+       WHERE session_id = $1`,
+      [openSession.id]
+    ) as { total: string }[],
+  ])
+
+  const openingAmount = Number(openSession.opening_amount || 0)
+  const cashSalesTotal = Number(sales[0]?.cash_total || 0)
+  const cardSalesTotal = Number(sales[0]?.card_total || 0)
+  const expensesTotal = Number(expenses[0]?.total || 0)
+  const withdrawalsTotal = Number(withdrawals[0]?.total || 0)
+  const expectedCash = openingAmount + cashSalesTotal - expensesTotal - withdrawalsTotal
+
+  await sql(
+    `UPDATE cash_sessions
+     SET
+       status = 'CLOSED',
+       closing_amount = $1,
+       closing_notes = $2,
+       closed_at = NOW(),
+       expected_cash = $3,
+       cash_sales_total = $4,
+       card_sales_total = $5,
+       expenses_total = $6,
+       withdrawals_total = $7
+     WHERE id = $8`,
+    [
+      closingAmount,
+      notes,
+      expectedCash,
+      cashSalesTotal,
+      cardSalesTotal,
+      expensesTotal,
+      withdrawalsTotal,
+      openSession.id,
+    ]
+  )
+
+  const variance = closingAmount - expectedCash
+
+  const reportMessage = [
+    "*Corte de Caja Cerrado*",
+    `Sesión #${openSession.id}`,
+    `Apertura: $${openingAmount.toFixed(2)}`,
+    `Ventas efectivo: $${cashSalesTotal.toFixed(2)}`,
+    `Ventas tarjeta: $${cardSalesTotal.toFixed(2)}`,
+    `Gastos: $${expensesTotal.toFixed(2)}`,
+    `Retiros: $${withdrawalsTotal.toFixed(2)}`,
+    `Esperado: $${expectedCash.toFixed(2)}`,
+    `Cierre declarado: $${closingAmount.toFixed(2)}`,
+    `Diferencia: $${variance.toFixed(2)}`,
+  ].join("\n")
+
+  try {
+    const { sendWhatsAppMessage } = await import("@/lib/whatsapp")
+    const recipients = await sql(
+      `SELECT phone
+       FROM whatsapp_recipients
+       WHERE is_active = TRUE
+       ORDER BY created_at DESC`
+    ) as { phone: string }[]
+
+    await Promise.all(recipients.map((recipient) => sendWhatsAppMessage(reportMessage, recipient.phone)))
+  } catch (error) {
+    console.error("Cash close WhatsApp notification failed:", error)
+  }
+
+  revalidatePath("/pos")
+  revalidatePath("/admin/sales")
+  revalidatePath("/admin/expenses")
+
+  return {
+    success: true,
+    sessionId: openSession.id,
+    expectedCash,
+    closingAmount,
+    variance,
+    exportUrl: `/api/cash-session/export?sessionId=${openSession.id}`,
   }
 }

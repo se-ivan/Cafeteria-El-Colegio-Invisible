@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import EscPosEncoder from 'esc-pos-encoder'
 import {
   Dialog,
   DialogContent,
@@ -35,6 +36,53 @@ export function CheckoutDialog({ open, onOpenChange, items, onConfirm }: Checkou
   const change = paymentMethod === "CASH" ? cashReceivedNumber - total : 0
   const isInsufficientCash = paymentMethod === "CASH" && cashReceived !== "" && cashReceivedNumber < total
 
+  const imprimirTicket = async () => {
+    try {
+      const vendorIdHex = process.env.NEXT_PUBLIC_PRINTER_VENDOR_ID || "0x04b8"
+      const vendorId = parseInt(vendorIdHex, 16)
+      
+      const device = await (navigator as any).usb.requestDevice({ filters: [{ vendorId }] })
+      await device.open()
+      await device.selectConfiguration(1)
+      await device.claimInterface(0)
+
+      let encoder = new EscPosEncoder()
+      encoder = encoder
+        .initialize()
+        .codepage('windows1252')
+        .align('center')
+        .bold(true)
+        .line('Cafetería El Colegio Invisible')
+        .bold(false)
+        .line('--------------------------------')
+
+      items.forEach(item => {
+        const itemTotal = (item.product.price * item.quantity).toFixed(2)
+        const namePart = item.product.name.padEnd(20, ' ').substring(0, 20)
+        const pricePart = `$${itemTotal}`.padStart(10, ' ')
+        encoder.line(`${item.quantity}x ${namePart} ${pricePart}`)
+      })
+
+      encoder
+        .line('--------------------------------')
+        .align('right')
+        .line(`Total: $${total.toFixed(2)}`)
+        .align('center')
+        .line('--------------------------------')
+        .line('¡Gracias por tu compra!')
+        .newline()
+        .newline()
+        .cut()
+
+      const result = encoder.encode()
+      await device.transferOut(device.configuration!.interfaces[0].alternate.endpoints.find((e: any) => e.direction === "out")!.endpointNumber, result)
+      await device.close()
+    } catch (err) {
+      console.error("Error imprimiendo:", err)
+      alert("Hubo un error al imprimir el ticket. Asegúrate de que la impresora esté permitida y conectada.")
+    }
+  }
+
   const handleConfirm = async () => {
     if (!paymentMethod) return
 
@@ -42,13 +90,6 @@ export function CheckoutDialog({ open, onOpenChange, items, onConfirm }: Checkou
     try {
       await onConfirm(paymentMethod, notes || undefined)
       setSuccess(true)
-      setTimeout(() => {
-        setSuccess(false)
-        setPaymentMethod(null)
-        setNotes("")
-        setCashReceived("")
-        onOpenChange(false)
-      }, 1500)
     } catch (error) {
       console.error("Checkout error:", error)
     } finally {
@@ -57,7 +98,8 @@ export function CheckoutDialog({ open, onOpenChange, items, onConfirm }: Checkou
   }
 
   const handleClose = () => {
-    if (!isProcessing && !success) {
+    if (!isProcessing) {
+      setSuccess(false)
       setPaymentMethod(null)
       setNotes("")
       setCashReceived("")
@@ -75,6 +117,27 @@ export function CheckoutDialog({ open, onOpenChange, items, onConfirm }: Checkou
             </div>
             <h3 className="text-xl font-semibold text-gray-900">Venta completada</h3>
             <p className="text-gray-500 mt-1">Total: ${total.toFixed(2)}</p>
+            {paymentMethod === "CASH" && (
+              <p className="text-emerald-600 font-medium mt-2">
+                Cambio: ${Math.max(change, 0).toFixed(2)}
+              </p>
+            )}
+            
+            <div className="flex gap-3 mt-8 w-full">
+              <Button 
+                variant="outline" 
+                className="flex-1"
+                onClick={imprimirTicket}
+              >
+                Imprimir Ticket
+              </Button>
+              <Button 
+                className="flex-1 bg-blue-500 hover:bg-blue-600 text-white"
+                onClick={handleClose}
+              >
+                Nueva Venta
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
