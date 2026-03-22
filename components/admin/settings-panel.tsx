@@ -7,6 +7,16 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -57,6 +67,8 @@ export function SettingsPanel({ workers, recipients, currentUserId }: SettingsPa
   const [recipientPhone, setRecipientPhone] = useState("")
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [workerToDelete, setWorkerToDelete] = useState<number | null>(null)
+  const [recipientToDelete, setRecipientToDelete] = useState<string | null>(null)
 
   const workersCount = useMemo(() => workers.length, [workers.length])
   const recipientsCount = useMemo(() => recipients.length, [recipients.length])
@@ -94,15 +106,22 @@ export function SettingsPanel({ workers, recipients, currentUserId }: SettingsPa
   }
 
   const handleRemoveWorker = (workerId: number) => {
+    setWorkerToDelete(workerId)
+  }
+
+  const confirmRemoveWorker = () => {
+    if (workerToDelete === null) return
     clearFeedback()
 
     startTransition(async () => {
       try {
-        await removeWorker(workerId)
+        await removeWorker(workerToDelete)
         setMessage("Trabajador eliminado")
       } catch (err) {
         const text = err instanceof Error ? err.message : "No se pudo eliminar el trabajador"
         setError(text)
+      } finally {
+        setWorkerToDelete(null)
       }
     })
   }
@@ -173,15 +192,22 @@ export function SettingsPanel({ workers, recipients, currentUserId }: SettingsPa
   }
 
   const handleRemoveRecipient = (recipientId: number) => {
+    setRecipientToDelete(recipientId.toString())
+  }
+
+  const confirmRemoveRecipient = () => {
+    if (recipientToDelete === null) return
     clearFeedback()
 
     startTransition(async () => {
       try {
-        await removeAlertRecipient(recipientId)
+        await removeAlertRecipient(parseInt(recipientToDelete, 10))
         setMessage("Numero eliminado de alertas")
       } catch (err) {
         const text = err instanceof Error ? err.message : "No se pudo eliminar el numero"
         setError(text)
+      } finally {
+        setRecipientToDelete(null)
       }
     })
   }
@@ -478,6 +504,40 @@ export function SettingsPanel({ workers, recipients, currentUserId }: SettingsPa
           </div>
         </CardContent>
       </Card>
+
+      <AlertDialog open={workerToDelete !== null} onOpenChange={(open) => !open && setWorkerToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar trabajador?</AlertDialogTitle>
+            <AlertDialogDescription>
+              ¿Estás seguro de que deseas eliminar este trabajador? Perderá el acceso al sistema.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmRemoveWorker} className="bg-red-500 hover:bg-red-600 text-white">
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={recipientToDelete !== null} onOpenChange={(open) => !open && setRecipientToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar número?</AlertDialogTitle>
+            <AlertDialogDescription>
+              ¿Estás seguro de que deseas eliminar este número de las alertas de WhatsApp?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmRemoveRecipient} className="bg-red-500 hover:bg-red-600 text-white">
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

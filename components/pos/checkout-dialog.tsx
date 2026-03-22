@@ -49,6 +49,11 @@ type ReceiptData = {
   cashierName: string
 }
 
+const TICKET_WIDTH = 24
+const PRODUCT_COL_WIDTH = 10
+const QTY_COL_WIDTH = 4
+const TOTAL_COL_WIDTH = 10
+
 function buildEscPosTicket(data: ReceiptData): string[] {
   const subtotalNoIva = data.total / 1.16
   const iva = data.total - subtotalNoIva
@@ -61,13 +66,13 @@ function buildEscPosTicket(data: ReceiptData): string[] {
     second: "2-digit",
   })
   const ticketCode = String(data.saleId).padStart(6, "0")
-  const line = "--------------------------------\n"
+  const line = `${"-".repeat(TICKET_WIDTH)}\n`
 
   const rows = data.items.map((item) => {
     const itemTotal = (item.product.price * item.quantity).toFixed(2)
-    const namePart = item.product.name.substring(0, 16).padEnd(16, " ")
-    const qtyPart = String(item.quantity).padStart(4, " ")
-    const pricePart = `$${itemTotal}`.padStart(12, " ")
+    const namePart = item.product.name.substring(0, PRODUCT_COL_WIDTH).padEnd(PRODUCT_COL_WIDTH, " ")
+    const qtyPart = String(item.quantity).padStart(QTY_COL_WIDTH, " ")
+    const pricePart = `$${itemTotal}`.padStart(TOTAL_COL_WIDTH, " ")
     return `${namePart}${qtyPart}${pricePart}\n`
   })
 
@@ -89,7 +94,7 @@ function buildEscPosTicket(data: ReceiptData): string[] {
     `Cajero: ${data.cashierName}\n`,
     `Ticket: ${ticketCode}\n`,
     line,
-    "Producto           Cant  Total\n",
+    "Producto   Cant   Total\n",
     line,
     ...rows,
     line,
@@ -263,25 +268,25 @@ export function CheckoutDialog({ open, onOpenChange, items, onConfirm }: Checkou
         .line('C. Margarita Maza de Juárez 319')
         .line('Colinas del Sur, Morelia, Mich.')
         .line('Tel: 443-000-0000')
-        .line('--------------------------------')
+        .line('-'.repeat(TICKET_WIDTH))
         .align('left')
         .line(`Fecha: ${fecha}`)
         .line(`Cajero: ${receiptData.cashierName}`)
         .line(`Ticket: ${ticketCode}`)
-        .line('--------------------------------')
-        .line('Producto           Cant  Total')
-        .line('--------------------------------')
+        .line('-'.repeat(TICKET_WIDTH))
+        .line('Producto   Cant   Total')
+        .line('-'.repeat(TICKET_WIDTH))
 
       receiptData.items.forEach(item => {
         const itemTotal = (item.product.price * item.quantity).toFixed(2)
-        const namePart = item.product.name.substring(0, 16).padEnd(16, ' ')
-        const qtyPart = String(item.quantity).padStart(4, ' ')
-        const pricePart = `$${itemTotal}`.padStart(12, ' ')
+        const namePart = item.product.name.substring(0, PRODUCT_COL_WIDTH).padEnd(PRODUCT_COL_WIDTH, ' ')
+        const qtyPart = String(item.quantity).padStart(QTY_COL_WIDTH, ' ')
+        const pricePart = `$${itemTotal}`.padStart(TOTAL_COL_WIDTH, ' ')
         encoder.line(`${namePart}${qtyPart}${pricePart}`)
       })
 
       encoder
-        .line('--------------------------------')
+        .line('-'.repeat(TICKET_WIDTH))
         .align('right')
         .line(`SUBTOTAL: $${subtotalNoIva.toFixed(2)}`)
         .line(`IVA 16%: $${iva.toFixed(2)}`)
@@ -289,7 +294,7 @@ export function CheckoutDialog({ open, onOpenChange, items, onConfirm }: Checkou
         .line(`TOTAL: $${receiptData.total.toFixed(2)}`)
         .bold(false)
         .align('center')
-        .line('--------------------------------')
+        .line('-'.repeat(TICKET_WIDTH))
         .line('Codigo de ticket')
         .barcode(barcodeValue, 'ean13', 64)
         .newline()
