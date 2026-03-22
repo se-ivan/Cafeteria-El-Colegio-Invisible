@@ -1,8 +1,8 @@
 import NextAuth from "next-auth"
 import Credentials from "next-auth/providers/credentials"
 import { compare } from "bcryptjs"
-import { prisma, sql } from "@/lib/db"
-import { ensureUserPermissionsColumn, permissionsForRole, sanitizePermissions } from "@/lib/permissions"
+import { prisma, sql, ensureUserPermissionsColumn } from "@/lib/db"
+import { permissionsForRole, sanitizePermissions } from "@/lib/permissions"
 import type { AppPermission, UserRole } from "@/lib/types"
 
 declare module "next-auth" {

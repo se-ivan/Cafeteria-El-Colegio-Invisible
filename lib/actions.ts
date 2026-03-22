@@ -1,6 +1,6 @@
 "use server"
 
-import { sql } from "@/lib/db"
+import { sql, ensureUserPermissionsColumn } from "@/lib/db"
 import { auth } from "@/lib/auth"
 import { revalidatePath } from "next/cache"
 import type { AppPermission, PaymentMethod, SupplyStatus, CartItem, Supply, RecipeItem, UserRole } from "@/lib/types"
@@ -8,7 +8,6 @@ import { sendExpenseAlert, sendInventoryAlert } from "@/lib/whatsapp"
 import { hash } from "bcryptjs"
 import { getRecipeByProduct as dbGetRecipeByProduct } from "@/lib/queries"
 import {
-  ensureUserPermissionsColumn,
   hasPermission,
   PERMISSION_IDS,
   permissionsForRole,

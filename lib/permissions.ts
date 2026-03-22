@@ -1,4 +1,3 @@
-import { sql } from "@/lib/db"
 import type { AppPermission, SessionUser, UserRole } from "@/lib/types"
 
 export const PERMISSION_IDS = {
@@ -103,11 +102,4 @@ export function hasAnyPermission(user: Pick<SessionUser, "role" | "permissions">
 
 export function canAccessAdminArea(user: Pick<SessionUser, "role" | "permissions"> | null | undefined): boolean {
   return hasAnyPermission(user, ADMIN_PANEL_PERMISSIONS)
-}
-
-export async function ensureUserPermissionsColumn() {
-  await sql(`
-    ALTER TABLE users
-    ADD COLUMN IF NOT EXISTS permissions TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[]
-  `)
 }

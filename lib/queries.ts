@@ -1,5 +1,5 @@
-import { sql } from "@/lib/db"
-import { ensureUserPermissionsColumn, sanitizePermissions } from "@/lib/permissions"
+import { sql, ensureUserPermissionsColumn } from "@/lib/db"
+import { sanitizePermissions } from "@/lib/permissions"
 import type {
   Category,
   Product,

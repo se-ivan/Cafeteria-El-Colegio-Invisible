@@ -32,6 +32,14 @@ export const sql: ReturnType<typeof neon> =
         throw new Error("sql client is only available on the server")
       }) as unknown as ReturnType<typeof neon>)
 
+export async function ensureUserPermissionsColumn() {
+  if (typeof window !== "undefined") return
+  await sql(`
+    ALTER TABLE users
+    ADD COLUMN IF NOT EXISTS permissions TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[]
+  `)
+}
+
 // Type definitions for database models
 export type Role = "ADMIN" | "CASHIER"
 export type SupplyStatus = "AVAILABLE" | "LOW" | "OUT"
