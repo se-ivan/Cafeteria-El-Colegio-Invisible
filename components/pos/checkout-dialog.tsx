@@ -4,6 +4,15 @@ import { useState } from "react"
 import EscPosEncoder from 'esc-pos-encoder'
 import { useSession } from "next-auth/react"
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -71,9 +80,8 @@ function buildEscPosTicket(data: ReceiptData): string[] {
     "\x1B\x45\x00", // Bold off
     "\x1D\x21\x00", // Normal size
     "LIBROS Y MAS\n",
-    "RFC: XAXX010101000\n",
-    "Av. Principal #123\n",
-    "Sucursal Margarita\n",
+    "C. Margarita Maza de Juárez 319\n",
+    "Colinas del Sur, Morelia, Mich.\n",
     "Tel: 443-000-0000\n",
     line,
     "\x1B\x61\x00", // Left
@@ -112,6 +120,7 @@ export function CheckoutDialog({ open, onOpenChange, items, onConfirm }: Checkou
   const [isProcessing, setIsProcessing] = useState(false)
   const [success, setSuccess] = useState(false)
   const [receiptData, setReceiptData] = useState<ReceiptData | null>(null)
+  const [printerError, setPrinterError] = useState<string | null>(null)
 
   const total = items.reduce((sum, item) => sum + (item.product.price * item.quantity), 0)
   const cashReceivedNumber = parseFloat(cashReceived || "0")
@@ -251,9 +260,8 @@ export function CheckoutDialog({ open, onOpenChange, items, onConfirm }: Checkou
         .bold(false)
         .newline()
         .line('LIBROS Y MAS')
-        .line('RFC: XAXX010101000')
-        .line('Av. Principal #123')
-        .line('Sucursal Margarita')
+        .line('C. Margarita Maza de Juárez 319')
+        .line('Colinas del Sur, Morelia, Mich.')
         .line('Tel: 443-000-0000')
         .line('--------------------------------')
         .align('left')
@@ -302,22 +310,20 @@ export function CheckoutDialog({ open, onOpenChange, items, onConfirm }: Checkou
     } catch (err) {
       console.error("Error imprimiendo:", err)
       if (err instanceof DOMException && err.name === "NotFoundError") {
-        alert(
-          "No se encontro una impresora USB compatible para seleccionar.\n\n"
-        )
-        return
-      }
-      if (err instanceof DOMException && err.name === "SecurityError") {
-        alert(
-          "El navegador no pudo abrir la impresora USB (Access denied).\n\n" +
-          "En Windows esto suele pasar cuando la impresora está usando el driver de impresión normal y no WinUSB para WebUSB.\n" +
-          "1) Desconecta/reconecta la impresora\n" +
-          "2) En chrome://settings/content/usbDevices elimina permisos del sitio y vuelve a autorizar\n" +
-          "3) Si sigue igual, esta impresora no puede usarse por WebUSB con su driver actual y se necesita un puente local (QZ Tray) o cambiar driver a WinUSB."
-        )
-        return
-      }
-      alert("Hubo un error al imprimir el ticket. Asegúrate de que la impresora esté permitida y conectada.")
+          setPrinterError("No se encontro una impresora USB compatible para seleccionar.")
+          return
+        }
+        if (err instanceof DOMException && err.name === "SecurityError") {
+          setPrinterError(
+            "El navegador no pudo abrir la impresora USB (Access denied).\n\n" +
+            "En Windows esto suele pasar cuando la impresora está usando el driver de impresión normal y no WinUSB para WebUSB.\n" +
+            "1) Desconecta/reconecta la impresora\n" +
+            "2) En chrome://settings/content/usbDevices elimina permisos del sitio y vuelve a autorizar\n" +
+            "3) Si sigue igual, esta impresora no puede usarse por WebUSB con su driver actual y se necesita un puente local (QZ Tray) o cambiar driver a WinUSB."
+          )
+          return
+        }
+        setPrinterError("Hubo un error al imprimir el ticket. Asegúrate de que la impresora esté permitida y conectada.")
     }
   }
 
@@ -357,6 +363,7 @@ export function CheckoutDialog({ open, onOpenChange, items, onConfirm }: Checkou
 
   if (success) {
     return (
+      <>
       <Dialog open={open} onOpenChange={handleClose}>
         <DialogContent className="sm:max-w-md" showCloseButton={false}>
           <div className="flex flex-col items-center justify-center py-8">
@@ -389,10 +396,27 @@ export function CheckoutDialog({ open, onOpenChange, items, onConfirm }: Checkou
           </div>
         </DialogContent>
       </Dialog>
+      <AlertDialog open={!!printerError} onOpenChange={(o) => (!o ? setPrinterError(null) : null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Error de Impresión</AlertDialogTitle>
+            <AlertDialogDescription className="whitespace-pre-line text-sm">
+              {printerError}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => setPrinterError(null)}>
+              Entendido
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      </>
     )
   }
 
   return (
+    <>
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
@@ -487,5 +511,22 @@ export function CheckoutDialog({ open, onOpenChange, items, onConfirm }: Checkou
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    <AlertDialog open={!!printerError} onOpenChange={(o) => (!o ? setPrinterError(null) : null)}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Error de Impresión</AlertDialogTitle>
+          <AlertDialogDescription className="whitespace-pre-line text-sm">
+            {printerError}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogAction onClick={() => setPrinterError(null)}>
+            Entendido
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   )
 }

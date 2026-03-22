@@ -6,6 +6,16 @@ import {
   CardContent,
   CardFooter,
 } from "@/components/ui/card"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { StatusBadge } from "./status-badge"
@@ -32,6 +42,7 @@ export function InventoryTable({ supplies }: InventoryTableProps) {
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState<SupplyStatus | "ALL">("ALL")
   const [isUpdating, setIsUpdating] = useState(false)
+  const [supplyToDelete, setSupplyToDelete] = useState<number | null>(null)
 
   const filteredSupplies = supplies.filter((supply) => {
     const matchesSearch = supply.name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -55,11 +66,17 @@ export function InventoryTable({ supplies }: InventoryTableProps) {
   }
 
   const handleDelete = async (supplyId: number) => {
-    if (confirm("Estas seguro de eliminar este insumo?")) {
+    setSupplyToDelete(supplyId)
+  }
+
+  const confirmDelete = async () => {
+    if (supplyToDelete !== null) {
       try {
-        await deleteSupply(supplyId)
+        await deleteSupply(supplyToDelete)
       } catch (error) {
         console.error("Error deleting supply:", error)
+      } finally {
+        setSupplyToDelete(null)
       }
     }
   }
@@ -178,6 +195,23 @@ export function InventoryTable({ supplies }: InventoryTableProps) {
         onOpenChange={setIsEditDialogOpen}
         onSave={handleSave}
       />
+
+      <AlertDialog open={supplyToDelete !== null} onOpenChange={(open) => !open && setSupplyToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar insumo?</AlertDialogTitle>
+            <AlertDialogDescription>
+              ¿Estás seguro de que deseas eliminar este insumo? Esta acción no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} className="bg-red-500 hover:bg-red-600 text-white">
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
