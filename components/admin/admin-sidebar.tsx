@@ -47,17 +47,16 @@ export function AdminSidebar({ className, onNavigate, user: serverUser }: AdminS
   const visibleItems = navItems.filter((item) => canAccess(item.permission))
 
   return (
-    <aside className={cn("w-64 bg-white border-r border-slate-100 flex flex-col h-full shadow-sm", className)}>
+    <aside className={cn("w-64 bg-white border-r border-slate-100 flex flex-col fixed inset-y-0 left-0 z-50 shadow-sm", className)}>
       {/* Logo */}
       <div className="p-6">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center shrink-0 relative overflow-hidden">
-            <div className="absolute inset-0 bg-blue-500/10"></div>
+          <div className="w-10 h-10 flex items-center justify-center shrink-0 relative overflow-hidden">
             <Image
-              src="/logoColegioInvisible.svg"
+              src="/logoColegioInvisible-dark.svg"
               alt="El Colegio Invisible"
-              width={20}
-              height={20}
+              width={40}
+              height={40}
               className="relative z-10"
             />
           </div>

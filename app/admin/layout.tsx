@@ -29,10 +29,10 @@ export default async function AdminLayout({
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 md:flex font-sans">
-      <AdminSidebar className="hidden md:flex shrink-0" user={session.user} />
+    <div className="min-h-screen bg-slate-50 flex font-sans">
+      <AdminSidebar className="hidden md:flex shrink-0 w-64 h-full" user={session.user} />
 
-      <div className="flex min-w-0 flex-1 flex-col h-screen overflow-hidden">
+      <div className="flex min-w-0 flex-1 flex-col h-screen md:ml-64 overflow-hidden">
         <header className="sticky top-0 z-30 border-b border-slate-100 bg-white/80 px-4 py-3 backdrop-blur-md md:hidden shadow-sm">
           <div className="flex items-center justify-between">
             <div>

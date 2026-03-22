@@ -169,7 +169,7 @@ export async function processSale(
   try {
     await ensureCashSessionTables()
 
-    const openSession = await sql(
+    let openSession = await sql(
       `SELECT id
        FROM cash_sessions
        WHERE user_id = $1 AND status = 'OPEN'
@@ -179,7 +179,15 @@ export async function processSale(
     ) as { id: number }[]
 
     if (openSession.length === 0) {
-      throw new Error("Debes abrir una sesión de caja antes de registrar ventas")
+      // Auto-open an operational cash session so POS sales are not blocked.
+      const createdSession = await sql(
+        `INSERT INTO cash_sessions (user_id, status, opening_amount, opening_notes)
+         VALUES ($1, 'OPEN', 0, $2)
+         RETURNING id`,
+        [userId, "Apertura automática por venta desde POS"]
+      ) as { id: number }[]
+
+      openSession = createdSession
     }
 
     const cashSessionId = openSession[0].id
@@ -188,9 +196,9 @@ export async function processSale(
     const saleResult = await sql(
       `INSERT INTO sales (user_id, cash_session_id, total, payment_method, notes)
        VALUES ($1, $2, $3, $4, $5)
-       RETURNING id`,
+       RETURNING id, created_at`,
       [userId, cashSessionId, total, paymentMethod, notes || null]
-    ) as { id: number }[]
+    ) as { id: number; created_at: Date }[]
     const saleId = saleResult[0].id
 
     // Insert sale items
@@ -288,9 +296,13 @@ export async function processSale(
       saleId,
       total,
       lowStockCount: lowStockSupplies.length,
+      createdAt: saleResult[0].created_at,
     }
   } catch (error) {
     console.error("Error processing sale:", error)
+    if (error instanceof Error) {
+      throw error
+    }
     throw new Error("Error al procesar la venta")
   }
 }

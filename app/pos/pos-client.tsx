@@ -90,7 +90,6 @@ export function POSClient({
     try {
       const result = await processSale(cart, paymentMethod, notes)
       setCart([])
-      setIsCheckoutOpen(false)
 
       toast.success("Venta registrada", {
         description: `Ticket #${result.saleId} generado por $${result.total.toFixed(2)}`,
@@ -103,6 +102,7 @@ export function POSClient({
       }
 
       router.refresh()
+      return result
     } catch (error) {
       console.error("Checkout error:", error)
       const description = error instanceof Error

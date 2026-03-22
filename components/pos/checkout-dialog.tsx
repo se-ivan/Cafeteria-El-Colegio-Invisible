@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import EscPosEncoder from 'esc-pos-encoder'
+import { useSession } from "next-auth/react"
 import {
   Dialog,
   DialogContent,
@@ -21,15 +22,32 @@ interface CheckoutDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   items: CartItem[]
-  onConfirm: (paymentMethod: PaymentMethod, notes?: string) => Promise<void>
+  onConfirm: (paymentMethod: PaymentMethod, notes?: string) => Promise<{
+    saleId: number
+    total: number
+    lowStockCount: number
+    createdAt: Date
+  }>
+}
+
+type ReceiptData = {
+  saleId: number
+  total: number
+  createdAt: Date
+  paymentMethod: PaymentMethod
+  items: CartItem[]
+  notes?: string
+  cashierName: string
 }
 
 export function CheckoutDialog({ open, onOpenChange, items, onConfirm }: CheckoutDialogProps) {
+  const { data: session } = useSession()
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(null)
   const [notes, setNotes] = useState("")
   const [cashReceived, setCashReceived] = useState("")
   const [isProcessing, setIsProcessing] = useState(false)
   const [success, setSuccess] = useState(false)
+  const [receiptData, setReceiptData] = useState<ReceiptData | null>(null)
 
   const total = items.reduce((sum, item) => sum + (item.product.price * item.quantity), 0)
   const cashReceivedNumber = parseFloat(cashReceived || "0")
@@ -37,6 +55,8 @@ export function CheckoutDialog({ open, onOpenChange, items, onConfirm }: Checkou
   const isInsufficientCash = paymentMethod === "CASH" && cashReceived !== "" && cashReceivedNumber < total
 
   const imprimirTicket = async () => {
+    if (!receiptData) return
+
     try {
       const vendorIdHex = process.env.NEXT_PUBLIC_PRINTER_VENDOR_ID || "0x04b8"
       const vendorId = parseInt(vendorIdHex, 16)
@@ -65,31 +85,78 @@ export function CheckoutDialog({ open, onOpenChange, items, onConfirm }: Checkou
       if (imgHeight === 0) imgHeight = 8
 
       let encoder = new EscPosEncoder()
+      const subtotalNoIva = receiptData.total / 1.16
+      const iva = receiptData.total - subtotalNoIva
+      const fecha = new Date(receiptData.createdAt).toLocaleString("es-MX", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      })
+      const ticketCode = String(receiptData.saleId).padStart(6, "0")
+      const barcodeValue = String(receiptData.saleId).padStart(12, "0")
+
       encoder = encoder
         .initialize()
         .codepage('windows1252')
         .align('center')
         .image(img, imgWidth, imgHeight, 'threshold')
+        .width(2)
+        .height(2)
+        .line('LIBRERIA Y CAFETERIA')
+        .width(1)
+        .height(1)
         .newline()
-        .bold(true)
-        .line('Cafetería El Colegio Invisible')
-        .bold(false)
+        .line('LIBROS Y MAS')
+        .line('RFC: XAXX010101000')
+        .line('Av. Principal #123')
+        .line('Sucursal Margarita')
+        .line('Tel: 443-000-0000')
+        .line('--------------------------------')
+        .align('left')
+        .line(`Fecha: ${fecha}`)
+        .line(`Cajero: ${receiptData.cashierName}`)
+        .line(`Ticket: ${ticketCode}`)
+        .line('--------------------------------')
+        .line('Producto           Cant  Total')
         .line('--------------------------------')
 
-      items.forEach(item => {
+      receiptData.items.forEach(item => {
         const itemTotal = (item.product.price * item.quantity).toFixed(2)
-        const namePart = item.product.name.padEnd(20, ' ').substring(0, 20)
-        const pricePart = `$${itemTotal}`.padStart(10, ' ')
-        encoder.line(`${item.quantity}x ${namePart} ${pricePart}`)
+        const namePart = item.product.name.substring(0, 16).padEnd(16, ' ')
+        const qtyPart = String(item.quantity).padStart(4, ' ')
+        const pricePart = `$${itemTotal}`.padStart(12, ' ')
+        encoder.line(`${namePart}${qtyPart}${pricePart}`)
       })
 
       encoder
         .line('--------------------------------')
         .align('right')
-        .line(`Total: $${total.toFixed(2)}`)
+        .line(`SUBTOTAL: $${subtotalNoIva.toFixed(2)}`)
+        .line(`IVA 16%: $${iva.toFixed(2)}`)
+        .width(2)
+        .height(2)
+        .line(`TOTAL: $${receiptData.total.toFixed(2)}`)
+        .width(1)
+        .height(1)
         .align('center')
         .line('--------------------------------')
+        .line('Codigo de ticket')
+        .barcode(barcodeValue, 'ean13', 64)
+        .newline()
+        .line('Escanea para promociones')
+        .qrcode('https://elcolegioinvisible.com/', 2, 6, 'm')
+        .newline()
         .line('¡Gracias por tu compra!')
+        .line('VUELVA PRONTO')
+        .newline()
+        .line('***** PROMOCION *****')
+        .line('2x1 EN FRAPPES')
+        .line('SOLO HOY')
+        .newline()
+        .newline()
         .newline()
         .newline()
         .cut()
@@ -108,7 +175,16 @@ export function CheckoutDialog({ open, onOpenChange, items, onConfirm }: Checkou
 
     setIsProcessing(true)
     try {
-      await onConfirm(paymentMethod, notes || undefined)
+      const result = await onConfirm(paymentMethod, notes || undefined)
+      setReceiptData({
+        saleId: result.saleId,
+        total: result.total,
+        createdAt: result.createdAt,
+        paymentMethod,
+        items: items.map((item) => ({ ...item })),
+        notes: notes || undefined,
+        cashierName: session?.user?.name || session?.user?.email || "Cajero",
+      })
       setSuccess(true)
     } catch (error) {
       console.error("Checkout error:", error)
@@ -123,6 +199,7 @@ export function CheckoutDialog({ open, onOpenChange, items, onConfirm }: Checkou
       setPaymentMethod(null)
       setNotes("")
       setCashReceived("")
+      setReceiptData(null)
       onOpenChange(false)
     }
   }
