@@ -46,11 +46,31 @@ export function CheckoutDialog({ open, onOpenChange, items, onConfirm }: Checkou
       await device.selectConfiguration(1)
       await device.claimInterface(0)
 
+      const img = new window.Image()
+      img.src = '/logo_negro.png'
+      await new Promise((resolve, reject) => {
+        img.onload = resolve
+        img.onerror = reject
+      })
+
+      let imgWidth = img.width
+      let imgHeight = img.height
+      if (imgWidth > 256) {
+        imgHeight = Math.floor((imgHeight * 256) / imgWidth)
+        imgWidth = 256
+      }
+      imgWidth = Math.floor(imgWidth / 8) * 8
+      imgHeight = Math.floor(imgHeight / 8) * 8
+      if (imgWidth === 0) imgWidth = 8
+      if (imgHeight === 0) imgHeight = 8
+
       let encoder = new EscPosEncoder()
       encoder = encoder
         .initialize()
         .codepage('windows1252')
         .align('center')
+        .image(img, imgWidth, imgHeight, 'threshold')
+        .newline()
         .bold(true)
         .line('Cafetería El Colegio Invisible')
         .bold(false)
