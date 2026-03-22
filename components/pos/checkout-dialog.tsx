@@ -40,6 +40,70 @@ type ReceiptData = {
   cashierName: string
 }
 
+function buildEscPosTicket(data: ReceiptData): string[] {
+  const subtotalNoIva = data.total / 1.16
+  const iva = data.total - subtotalNoIva
+  const fecha = new Date(data.createdAt).toLocaleString("es-MX", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  })
+  const ticketCode = String(data.saleId).padStart(6, "0")
+  const line = "--------------------------------\n"
+
+  const rows = data.items.map((item) => {
+    const itemTotal = (item.product.price * item.quantity).toFixed(2)
+    const namePart = item.product.name.substring(0, 16).padEnd(16, " ")
+    const qtyPart = String(item.quantity).padStart(4, " ")
+    const pricePart = `$${itemTotal}`.padStart(12, " ")
+    return `${namePart}${qtyPart}${pricePart}\n`
+  })
+
+  return [
+    "\x1B\x40", // Initialize printer
+    "\x1B\x61\x01", // Center
+    "\x1D\x21\x00", // Normal size
+    "\x1B\x45\x01", // Bold on
+    "LIBRERIA Y CAFETERIA\n",
+    "\x1B\x45\x00", // Bold off
+    "\x1D\x21\x00", // Normal size
+    "LIBROS Y MAS\n",
+    "RFC: XAXX010101000\n",
+    "Av. Principal #123\n",
+    "Sucursal Margarita\n",
+    "Tel: 443-000-0000\n",
+    line,
+    "\x1B\x61\x00", // Left
+    `Fecha: ${fecha}\n`,
+    `Cajero: ${data.cashierName}\n`,
+    `Ticket: ${ticketCode}\n`,
+    line,
+    "Producto           Cant  Total\n",
+    line,
+    ...rows,
+    line,
+    "\x1B\x61\x02", // Right
+    `SUBTOTAL: $${subtotalNoIva.toFixed(2)}\n`,
+    `IVA 16%: $${iva.toFixed(2)}\n`,
+    "\x1B\x45\x01", // Bold on
+    `TOTAL: $${data.total.toFixed(2)}\n`,
+    "\x1B\x45\x00", // Bold off
+    "\x1B\x61\x01", // Center
+    line,
+    `Codigo: ${ticketCode}\n`,
+    "Escanea para promociones\n",
+    "https://elcolegioinvisible.com/\n",
+    "\n",
+    "GRACIAS POR SU COMPRA\n",
+    "VUELVA PRONTO\n",
+    "\n\n\n",
+    "\x1D\x56\x00", // Full cut
+  ]
+}
+
 export function CheckoutDialog({ open, onOpenChange, items, onConfirm }: CheckoutDialogProps) {
   const { data: session } = useSession()
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(null)
@@ -54,14 +118,87 @@ export function CheckoutDialog({ open, onOpenChange, items, onConfirm }: Checkou
   const change = paymentMethod === "CASH" ? cashReceivedNumber - total : 0
   const isInsufficientCash = paymentMethod === "CASH" && cashReceived !== "" && cashReceivedNumber < total
 
+  const parseUsbId = (raw: string, fallback: number) => {
+    const value = raw?.trim()
+    if (!value) return fallback
+    if (value.toLowerCase().startsWith("0x")) {
+      return Number.parseInt(value, 16)
+    }
+    if (/^[0-9]+$/.test(value)) {
+      return Number.parseInt(value, 10)
+    }
+    return Number.parseInt(value, 16)
+  }
+
+  const imprimirConQzTray = async () => {
+    if (!receiptData) return false
+
+    const qz = (window as any).qz
+    if (!qz) return false
+
+    if (qz.security?.setCertificatePromise) {
+      qz.security.setCertificatePromise((resolve: (cert?: string) => void) => resolve())
+    }
+    if (qz.security?.setSignaturePromise) {
+      qz.security.setSignaturePromise(() => (resolve: (signature?: string) => void) => resolve())
+    }
+
+    if (!qz.websocket.isActive()) {
+      await qz.websocket.connect({ retries: 1, delay: 0 })
+    }
+
+    const preferredPrinter = process.env.NEXT_PUBLIC_QZ_PRINTER_NAME?.trim()
+    let printerName: string | undefined
+
+    if (preferredPrinter) {
+      const found = await qz.printers.find(preferredPrinter)
+      printerName = Array.isArray(found) ? found[0] : found
+    } else {
+      const found = await qz.printers.find()
+      printerName = Array.isArray(found) ? found[0] : found
+    }
+
+    if (!printerName) {
+      throw new Error("No se encontro impresora para QZ Tray")
+    }
+
+    const config = qz.configs.create(printerName, {
+      encoding: "Cp1252",
+      copies: 1,
+    })
+    const data = buildEscPosTicket(receiptData)
+
+    await qz.print(config, data)
+    return true
+  }
+
   const imprimirTicket = async () => {
     if (!receiptData) return
 
     try {
-      const vendorIdHex = process.env.NEXT_PUBLIC_PRINTER_VENDOR_ID || "0x04b8"
-      const vendorId = parseInt(vendorIdHex, 16)
-      
-      const device = await (navigator as any).usb.requestDevice({ filters: [{ vendorId }] })
+      const printed = await imprimirConQzTray()
+      if (printed) {
+        return
+      }
+    } catch (qzError) {
+      console.error("QZ Tray no disponible, usando WebUSB como respaldo:", qzError)
+    }
+
+    try {
+      const vendorId = parseUsbId(process.env.NEXT_PUBLIC_PRINTER_VENDOR_ID || "0x04b8", 0x04b8)
+      const productId = parseUsbId(process.env.NEXT_PUBLIC_PRINTER_PRODUCT_ID || "", Number.NaN)
+      const usb = (navigator as any).usb
+      const filters = Number.isNaN(productId) ? [{ vendorId }] : [{ vendorId, productId }]
+
+      const grantedDevices = await usb.getDevices()
+      let device = grantedDevices.find((d: any) =>
+        d.vendorId === vendorId && (Number.isNaN(productId) || d.productId === productId)
+      )
+
+      if (!device) {
+        device = await usb.requestDevice({ filters })
+      }
+
       await device.open()
       await device.selectConfiguration(1)
       await device.claimInterface(0)
@@ -75,9 +212,10 @@ export function CheckoutDialog({ open, onOpenChange, items, onConfirm }: Checkou
 
       let imgWidth = img.width
       let imgHeight = img.height
-      if (imgWidth > 256) {
-        imgHeight = Math.floor((imgHeight * 256) / imgWidth)
-        imgWidth = 256
+      const maxLogoWidth = 160
+      if (imgWidth > maxLogoWidth) {
+        imgHeight = Math.floor((imgHeight * maxLogoWidth) / imgWidth)
+        imgWidth = maxLogoWidth
       }
       imgWidth = Math.floor(imgWidth / 8) * 8
       imgHeight = Math.floor(imgHeight / 8) * 8
@@ -103,11 +241,9 @@ export function CheckoutDialog({ open, onOpenChange, items, onConfirm }: Checkou
         .codepage('windows1252')
         .align('center')
         .image(img, imgWidth, imgHeight, 'threshold')
-        .width(2)
-        .height(2)
+        .bold(true)
         .line('LIBRERIA Y CAFETERIA')
-        .width(1)
-        .height(1)
+        .bold(false)
         .newline()
         .line('LIBROS Y MAS')
         .line('RFC: XAXX010101000')
@@ -136,11 +272,9 @@ export function CheckoutDialog({ open, onOpenChange, items, onConfirm }: Checkou
         .align('right')
         .line(`SUBTOTAL: $${subtotalNoIva.toFixed(2)}`)
         .line(`IVA 16%: $${iva.toFixed(2)}`)
-        .width(2)
-        .height(2)
+        .bold(true)
         .line(`TOTAL: $${receiptData.total.toFixed(2)}`)
-        .width(1)
-        .height(1)
+        .bold(false)
         .align('center')
         .line('--------------------------------')
         .line('Codigo de ticket')
@@ -152,10 +286,6 @@ export function CheckoutDialog({ open, onOpenChange, items, onConfirm }: Checkou
         .line('¡Gracias por tu compra!')
         .line('VUELVA PRONTO')
         .newline()
-        .line('***** PROMOCION *****')
-        .line('2x1 EN FRAPPES')
-        .line('SOLO HOY')
-        .newline()
         .newline()
         .newline()
         .newline()
@@ -166,6 +296,16 @@ export function CheckoutDialog({ open, onOpenChange, items, onConfirm }: Checkou
       await device.close()
     } catch (err) {
       console.error("Error imprimiendo:", err)
+      if (err instanceof DOMException && err.name === "SecurityError") {
+        alert(
+          "El navegador no pudo abrir la impresora USB (Access denied).\n\n" +
+          "En Windows esto suele pasar cuando la impresora está usando el driver de impresión normal y no WinUSB para WebUSB.\n" +
+          "1) Desconecta/reconecta la impresora\n" +
+          "2) En chrome://settings/content/usbDevices elimina permisos del sitio y vuelve a autorizar\n" +
+          "3) Si sigue igual, esta impresora no puede usarse por WebUSB con su driver actual y se necesita un puente local (QZ Tray) o cambiar driver a WinUSB."
+        )
+        return
+      }
       alert("Hubo un error al imprimir el ticket. Asegúrate de que la impresora esté permitida y conectada.")
     }
   }
