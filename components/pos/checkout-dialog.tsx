@@ -125,6 +125,11 @@ export function CheckoutDialog({ open, onOpenChange, items, onConfirm }: Checkou
       return Number.parseInt(value, 16)
     }
     if (/^[0-9]+$/.test(value)) {
+      // Many USB IDs are configured as 4 hex digits (e.g. 0483) without 0x prefix.
+      // Interpret that shape as hex to avoid mismatches when filtering devices.
+      if (value.length === 4 && value.startsWith("0")) {
+        return Number.parseInt(value, 16)
+      }
       return Number.parseInt(value, 10)
     }
     return Number.parseInt(value, 16)
@@ -296,6 +301,12 @@ export function CheckoutDialog({ open, onOpenChange, items, onConfirm }: Checkou
       await device.close()
     } catch (err) {
       console.error("Error imprimiendo:", err)
+      if (err instanceof DOMException && err.name === "NotFoundError") {
+        alert(
+          "No se encontro una impresora USB compatible para seleccionar.\n\n"
+        )
+        return
+      }
       if (err instanceof DOMException && err.name === "SecurityError") {
         alert(
           "El navegador no pudo abrir la impresora USB (Access denied).\n\n" +
