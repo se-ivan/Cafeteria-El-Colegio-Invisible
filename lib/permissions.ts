@@ -50,7 +50,7 @@ export const PERMISSION_CATALOG: ReadonlyArray<{ id: AppPermission; label: strin
   },
   {
     id: PERMISSION_IDS.POS_ACCESS,
-    label: "POS",
+    label: "Cafeteria",
     description: "Acceso al punto de venta",
   },
   {

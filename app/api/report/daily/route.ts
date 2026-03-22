@@ -147,7 +147,7 @@ export async function GET(request: Request) {
       status: 200,
       headers: {
         "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "Content-Disposition": `attachment; filename="pos-reporte-${date}.xlsx"`,
+        "Content-Disposition": `attachment; filename="cafeteria-reporte-${date}.xlsx"`,
         "Cache-Control": "no-store",
       },
     })
@@ -200,7 +200,7 @@ export async function GET(request: Request) {
     status: 200,
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="pos-reporte-${date}.csv"`,
+      "Content-Disposition": `attachment; filename="cafeteria-reporte-${date}.csv"`,
       "Cache-Control": "no-store",
     },
   })

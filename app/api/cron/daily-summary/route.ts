@@ -77,7 +77,7 @@ export async function GET(request: Request) {
 
   const message = hasMovements
     ? [
-        "*Resumen Diario POS*",
+        "*Resumen Diario Cafeteria*",
         "",
         `Fecha: ${dateText}`,
         `Ventas: ${salesCount} (${formatCurrency(totalSales)})`,
@@ -86,7 +86,7 @@ export async function GET(request: Request) {
         `Gastos: ${expensesCount} (${formatCurrency(totalExpenses)})`,
         `Neto del día: ${formatCurrency(net)}`,
       ].join("\n")
-    : ["*Resumen Diario POS*", "", `Fecha: ${dateText}`, "Sin movimientos hoy."].join("\n")
+    : ["*Resumen Diario Cafeteria*", "", `Fecha: ${dateText}`, "Sin movimientos hoy."].join("\n")
 
   const results = await Promise.all(recipients.map((recipient) => sendWhatsAppMessage(message, recipient.phone)))
   const sent = results.filter((result) => result.success).length

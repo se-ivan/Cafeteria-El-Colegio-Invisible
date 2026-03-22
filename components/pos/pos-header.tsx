@@ -142,7 +142,7 @@ export function POSHeader({
         </div>
         <div className="flex flex-col">
           <h1 className="text-sm font-semibold tracking-tight text-slate-900">El Colegio Invisible</h1>
-          <p className="text-[10px] font-medium text-blue-500 uppercase tracking-widest mt-0.5">POS & Caja</p>
+          <p className="text-[10px] font-medium text-blue-500 uppercase tracking-widest mt-0.5">Cafeteria y Caja</p>
         </div>
       </div>
 

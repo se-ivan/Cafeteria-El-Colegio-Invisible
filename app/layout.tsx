@@ -12,7 +12,7 @@ const _geist = Geist({ subsets: ["latin"] });
 const _geistMono = Geist_Mono({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'El Colegio Invisible | Sistema POS',
+  title: 'El Colegio Invisible | Sistema de Cafeteria',
   description: 'Sistema de Punto de Venta para El Colegio Invisible - Libreria y Cafeteria en Morelia, Michoacan',
   generator: 'v0.app',
   icons: {

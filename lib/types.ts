@@ -136,7 +136,7 @@ export interface CashWithdrawal {
   created_at: Date
 }
 
-// Cart types for POS
+// Cart types for cafeteria checkout
 export interface CartItem {
   product: Product
   quantity: number

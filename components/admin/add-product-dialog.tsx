@@ -81,7 +81,7 @@ export function AddProductDialog({ categories }: AddProductDialogProps) {
               Nuevo Producto
             </DialogTitle>
             <DialogDescription className="text-slate-500 text-base">
-              Registra un nuevo producto en tu menú de POS.
+              Registra un nuevo producto en tu menu de cafeteria.
             </DialogDescription>
           </DialogHeader>
         </div>

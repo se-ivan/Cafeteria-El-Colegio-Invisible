@@ -179,12 +179,12 @@ export async function processSale(
     ) as { id: number }[]
 
     if (openSession.length === 0) {
-      // Auto-open an operational cash session so POS sales are not blocked.
+      // Auto-open an operational cash session so cafeteria sales are not blocked.
       const createdSession = await sql(
         `INSERT INTO cash_sessions (user_id, status, opening_amount, opening_notes)
          VALUES ($1, 'OPEN', 0, $2)
          RETURNING id`,
-        [userId, "Apertura automática por venta desde POS"]
+        [userId, "Apertura automatica por venta desde cafeteria"]
       ) as { id: number }[]
 
       openSession = createdSession

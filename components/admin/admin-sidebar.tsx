@@ -100,7 +100,7 @@ export function AdminSidebar({ className, onNavigate, user: serverUser }: AdminS
               className="group flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-all duration-200"
             >
               <Monitor className="h-4 w-4 text-slate-400 group-hover:text-slate-900 transition-colors" />
-              <span>Terminal POS</span>
+              <span>Terminal de Cafeteria</span>
             </Link>
           ) : null}
         </div>
