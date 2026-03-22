@@ -49,10 +49,21 @@ type ReceiptData = {
   cashierName: string
 }
 
-const TICKET_WIDTH = 24
-const PRODUCT_COL_WIDTH = 10
-const QTY_COL_WIDTH = 4
-const TOTAL_COL_WIDTH = 10
+const TICKET_WIDTH = 32
+const PRODUCT_COL_WIDTH = 14
+const QTY_COL_WIDTH = 6
+const TOTAL_COL_WIDTH = 12
+
+function centerText(text: string): string {
+  if (text.length >= TICKET_WIDTH) return text
+  const leftPad = Math.floor((TICKET_WIDTH - text.length) / 2)
+  return " ".repeat(leftPad) + text
+}
+
+function rightText(text: string): string {
+  if (text.length >= TICKET_WIDTH) return text
+  return text.padStart(TICKET_WIDTH, " ")
+}
 
 function buildEscPosTicket(data: ReceiptData): string[] {
   const subtotalNoIva = data.total / 1.16
@@ -78,40 +89,36 @@ function buildEscPosTicket(data: ReceiptData): string[] {
 
   return [
     "\x1B\x40", // Initialize printer
-    "\x1B\x61\x01", // Center
     "\x1D\x21\x00", // Normal size
     "\x1B\x45\x01", // Bold on
-    "LIBRERIA Y CAFETERIA\n",
+    centerText("LIBRERIA Y CAFETERIA") + "\n",
     "\x1B\x45\x00", // Bold off
     "\x1D\x21\x00", // Normal size
-    "LIBROS Y MAS\n",
-    "C. Margarita Maza de Juárez 319\n",
-    "Colinas del Sur, Morelia, Mich.\n",
-    "Tel: 443-000-0000\n",
+    centerText("LIBROS Y MAS") + "\n",
+    centerText("C. Margarita Maza de Juárez 319") + "\n",
+    centerText("Colinas del Sur, Morelia, Mich.") + "\n",
+    centerText("Tel: 443-000-0000") + "\n",
     line,
-    "\x1B\x61\x00", // Left
     `Fecha: ${fecha}\n`,
     `Cajero: ${data.cashierName}\n`,
     `Ticket: ${ticketCode}\n`,
     line,
-    "Producto   Cant   Total\n",
+    "Producto".padEnd(PRODUCT_COL_WIDTH, " ") + "Cant".padStart(QTY_COL_WIDTH, " ") + "Total".padStart(TOTAL_COL_WIDTH, " ") + "\n",
     line,
     ...rows,
     line,
-    "\x1B\x61\x02", // Right
-    `SUBTOTAL: $${subtotalNoIva.toFixed(2)}\n`,
-    `IVA 16%: $${iva.toFixed(2)}\n`,
+    rightText(`SUBTOTAL: $${subtotalNoIva.toFixed(2)}`) + "\n",
+    rightText(`IVA 16%: $${iva.toFixed(2)}`) + "\n",
     "\x1B\x45\x01", // Bold on
-    `TOTAL: $${data.total.toFixed(2)}\n`,
+    rightText(`TOTAL: $${data.total.toFixed(2)}`) + "\n",
     "\x1B\x45\x00", // Bold off
-    "\x1B\x61\x01", // Center
     line,
-    `Codigo: ${ticketCode}\n`,
-    "Escanea para promociones\n",
-    "https://elcolegioinvisible.com/\n",
+    centerText(`Codigo: ${ticketCode}`) + "\n",
+    centerText("Escanea para promociones") + "\n",
+    centerText("https://elcolegioinvisible.com/") + "\n",
     "\n",
-    "GRACIAS POR SU COMPRA\n",
-    "VUELVA PRONTO\n",
+    centerText("GRACIAS POR SU COMPRA") + "\n",
+    centerText("VUELVA PRONTO") + "\n",
     "\n\n\n",
     "\x1D\x56\x00", // Full cut
   ]
@@ -260,21 +267,21 @@ export function CheckoutDialog({ open, onOpenChange, items, onConfirm }: Checkou
         .codepage('windows1252')
         .align('center')
         .image(img, imgWidth, imgHeight, 'threshold')
+        .align('left')
         .bold(true)
-        .line('LIBRERIA Y CAFETERIA')
+        .line(centerText('LIBRERIA Y CAFETERIA'))
         .bold(false)
         .newline()
-        .line('LIBROS Y MAS')
-        .line('C. Margarita Maza de Juárez 319')
-        .line('Colinas del Sur, Morelia, Mich.')
-        .line('Tel: 443-000-0000')
+        .line(centerText('LIBROS Y MAS'))
+        .line(centerText('C. Margarita Maza de Juárez 319'))
+        .line(centerText('Colinas del Sur, Morelia, Mich.'))
+        .line(centerText('Tel: 443-000-0000'))
         .line('-'.repeat(TICKET_WIDTH))
-        .align('left')
         .line(`Fecha: ${fecha}`)
         .line(`Cajero: ${receiptData.cashierName}`)
         .line(`Ticket: ${ticketCode}`)
         .line('-'.repeat(TICKET_WIDTH))
-        .line('Producto   Cant   Total')
+        .line("Producto".padEnd(PRODUCT_COL_WIDTH, " ") + "Cant".padStart(QTY_COL_WIDTH, " ") + "Total".padStart(TOTAL_COL_WIDTH, " "))
         .line('-'.repeat(TICKET_WIDTH))
 
       receiptData.items.forEach(item => {
@@ -287,22 +294,24 @@ export function CheckoutDialog({ open, onOpenChange, items, onConfirm }: Checkou
 
       encoder
         .line('-'.repeat(TICKET_WIDTH))
-        .align('right')
-        .line(`SUBTOTAL: $${subtotalNoIva.toFixed(2)}`)
-        .line(`IVA 16%: $${iva.toFixed(2)}`)
+        .line(rightText(`SUBTOTAL: $${subtotalNoIva.toFixed(2)}`))
+        .line(rightText(`IVA 16%: $${iva.toFixed(2)}`))
         .bold(true)
-        .line(`TOTAL: $${receiptData.total.toFixed(2)}`)
+        .line(rightText(`TOTAL: $${receiptData.total.toFixed(2)}`))
         .bold(false)
-        .align('center')
         .line('-'.repeat(TICKET_WIDTH))
-        .line('Codigo de ticket')
+        .line(centerText('Codigo de ticket'))
+        .align('center')
         .barcode(barcodeValue, 'ean13', 64)
+        .align('left')
         .newline()
-        .line('Escanea para promociones')
+        .line(centerText('Escanea para promociones'))
+        .align('center')
         .qrcode('https://elcolegioinvisible.com/', 2, 6, 'm')
+        .align('left')
         .newline()
-        .line('¡Gracias por tu compra!')
-        .line('VUELVA PRONTO')
+        .line(centerText('¡Gracias por tu compra!'))
+        .line(centerText('VUELVA PRONTO'))
         .newline()
         .newline()
         .newline()
