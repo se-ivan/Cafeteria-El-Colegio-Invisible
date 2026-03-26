@@ -1,4 +1,4 @@
-import { getSupplies, getLowStockSupplies } from "@/lib/queries"
+import { getSupplies, getLowStockSupplies, getCategories } from "@/lib/queries"
 import { auth } from "@/lib/auth"
 import { hasPermission, PERMISSION_IDS } from "@/lib/permissions"
 import { InventoryTable } from "@/components/admin/inventory-table"
@@ -14,9 +14,10 @@ export default async function InventoryPage() {
     redirect("/pos")
   }
 
-  const [supplies, lowStockSupplies] = await Promise.all([
+  const [supplies, lowStockSupplies, categories] = await Promise.all([
     getSupplies(),
-    getLowStockSupplies()
+    getLowStockSupplies(),
+    getCategories(),
   ])
 
   const stats = {
@@ -33,7 +34,7 @@ export default async function InventoryPage() {
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">Inventario</h1>
           <p className="text-sm text-slate-500 mt-1">Gestiona el catálogo de insumos y verifica el stock disponible.</p>
         </div>
-        <AddSupplyDialog />
+        <AddSupplyDialog categories={categories} />
       </div>
 
       {/* Stats Cards */}

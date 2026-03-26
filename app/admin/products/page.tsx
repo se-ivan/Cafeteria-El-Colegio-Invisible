@@ -3,6 +3,8 @@ import { auth } from "@/lib/auth"
 import { hasPermission, PERMISSION_IDS } from "@/lib/permissions"
 import { ProductsTable } from "@/components/admin/products-table"
 import { AddProductDialog } from "@/components/admin/add-product-dialog"
+import { AddCategoryDialog } from "@/components/admin/add-category-dialog"
+import { ManageCategories } from "@/components/admin/manage-categories"
 import { redirect } from "next/navigation"
 import { ShoppingBag } from "lucide-react"
 
@@ -27,8 +29,13 @@ export default async function ProductsPage() {
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Productos</h1>
           <p className="text-slate-500 mt-1">Gestiona tu menu y recetas</p>
         </div>
-        <AddProductDialog categories={categories} />
+        <div className="flex items-center gap-3">
+          <AddCategoryDialog />
+          <AddProductDialog categories={categories} />
+        </div>
       </div>
+
+      <ManageCategories categories={categories} />
 
       {/* Stats */}
       <div className="bg-white p-5 rounded-xl border border-slate-100 shadow-sm relative overflow-hidden mb-6">

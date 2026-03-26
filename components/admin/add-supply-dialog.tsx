@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import type { Category } from "@/lib/types"
 import {
   Dialog,
   DialogContent,
@@ -26,7 +27,7 @@ const CATEGORIES = [
   { id: "Otros", icon: UtensilsCrossed, color: "text-slate-600", bg: "bg-slate-100", border: "border-slate-200" },
 ]
 
-export function AddSupplyDialog() {
+export function AddSupplyDialog({ categories }: { categories?: Category[] }) {
   const [open, setOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [formData, setFormData] = useState({
@@ -87,8 +88,8 @@ export function AddSupplyDialog() {
             <div className="space-y-3">
               <Label className="text-sm font-semibold text-slate-700">Categoría del Insumo</Label>
               <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
-                {CATEGORIES.map((cat) => {
-                  const Icon = cat.icon
+                {(categories && categories.length > 0 ? categories.map(c => ({ id: c.name })) : CATEGORIES).map((cat: any) => {
+                  const Icon = cat.icon || Package
                   const isSelected = formData.category === cat.id
                   return (
                     <button
@@ -98,13 +99,12 @@ export function AddSupplyDialog() {
                       className={cn(
                         "flex flex-col items-center gap-2 p-3 rounded-xl border-2 transition-all duration-200",
                         isSelected 
-                          ? `${cat.border} ${cat.bg} shadow-md scale-[1.02]` 
-                          : "border-slate-100 bg-white hover:border-slate-200 hover:bg-slate-50 hover:scale-[1.02] text-slate-500",
-                        isSelected ? cat.color : ""
+                          ? "border-blue-300 bg-blue-50 shadow-md scale-[1.02]" 
+                          : "border-slate-100 bg-white hover:border-slate-200 hover:bg-slate-50 hover:scale-[1.02] text-slate-500"
                       )}
                     >
-                      <Icon className={cn("h-6 w-6 mb-1", isSelected ? cat.color : "text-slate-400")} />
-                      <span className={cn("text-xs font-semibold", isSelected ? cat.color : "text-slate-500")}>
+                      <Icon className={cn("h-6 w-6 mb-1", isSelected ? "text-blue-600" : "text-slate-400")} />
+                      <span className={cn("text-xs font-semibold", isSelected ? "text-blue-700" : "text-slate-500")}>
                         {cat.id}
                       </span>
                     </button>

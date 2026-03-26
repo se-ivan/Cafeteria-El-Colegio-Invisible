@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Input } from "@/components/ui/input"
-import { Search, Coffee, Snowflake, Croissant, Utensils, UtensilsCrossed, PackageOpen, CakeSlice, CupSoda } from "lucide-react"
+import { Search, Coffee, Snowflake, Croissant, Utensils, UtensilsCrossed, PackageOpen, CakeSlice, CupSoda, Tag } from "lucide-react"
 import type { Category, Product } from "@/lib/types"
 
 interface ProductGridProps {
@@ -24,6 +24,18 @@ const getCategoryIcon = (categoryName: string) => {
   if (name.includes('postre') || name.includes('crepa') || name.includes('pastel')) return CakeSlice
   if (name.includes('bebida') || name.includes('refresco')) return CupSoda
   return UtensilsCrossed
+}
+
+const getIconByName = (name: string) => {
+  const n = (name || "").toLowerCase()
+  if (n === "coffee") return Coffee
+  if (n === "snowflake") return Snowflake
+  if (n === "croissant") return Croissant
+  if (n === "utensils") return Utensils
+  if (n === "package") return PackageOpen
+  if (n === "cake") return CakeSlice
+  if (n === "cup") return CupSoda
+  return Tag
 }
 
 export function ProductGrid({ categories, products, onAddToCart }: ProductGridProps) {
@@ -98,9 +110,9 @@ export function ProductGrid({ categories, products, onAddToCart }: ProductGridPr
                       variant="outline"
                       className="h-auto min-h-36 flex flex-col items-center justify-center gap-3 bg-white hover:bg-slate-50 border-slate-200/80 text-slate-800 hover:text-blue-600 transition-all rounded-2xl shadow-sm hover:shadow-md p-4 whitespace-normal group"
                     >
-                      <div className="h-12 w-12 shrink-0 rounded-2xl bg-slate-50 group-hover:bg-blue-50/50 flex items-center justify-center text-slate-500 group-hover:text-blue-600 transition-colors border border-slate-100 group-hover:border-blue-100 mb-1">
+                      <div className="h-12 w-12 shrink-0 rounded-2xl flex items-center justify-center transition-colors border mb-1" style={{ backgroundColor: (product.color as string) || undefined, borderColor: '#E6E6E6' }}>
                          {(() => {
-                           const ProductIcon = getCategoryIcon(category.name);
+                           const ProductIcon = product.icon ? getIconByName(product.icon) : getCategoryIcon(category.name);
                            return <ProductIcon className="h-6 w-6" strokeWidth={1.5} />
                          })()}
                       </div>

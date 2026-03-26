@@ -419,6 +419,10 @@ export async function updateProduct(productId: number, data: {
   assertPermission(session, PERMISSION_IDS.PRODUCTS_MANAGE)
 
   try {
+    // Ensure optional columns exist
+    await sql(`ALTER TABLE products ADD COLUMN IF NOT EXISTS icon TEXT`)
+    await sql(`ALTER TABLE products ADD COLUMN IF NOT EXISTS color TEXT`)
+
     await sql(
       `UPDATE products
        SET name = $1, price = $2, category_id = $3, is_active = $4, updated_at = NOW()
@@ -445,10 +449,14 @@ export async function createProduct(data: {
   assertPermission(session, PERMISSION_IDS.PRODUCTS_MANAGE)
 
   try {
+    // Ensure optional columns exist
+    await sql(`ALTER TABLE products ADD COLUMN IF NOT EXISTS icon TEXT`)
+    await sql(`ALTER TABLE products ADD COLUMN IF NOT EXISTS color TEXT`)
+
     await sql(
-      `INSERT INTO products (name, price, category_id)
-       VALUES ($1, $2, $3)`,
-      [data.name, data.price, data.categoryId]
+      `INSERT INTO products (name, price, category_id, icon, color)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [data.name, data.price, data.categoryId, (data as any).icon || null, (data as any).color || null]
     )
 
     revalidatePath("/admin/products")
@@ -457,6 +465,74 @@ export async function createProduct(data: {
   } catch (error) {
     console.error("Error creating product:", error)
     throw new Error("Error al crear producto")
+  }
+}
+
+// Create category
+export async function createCategory(data: { name: string; displayOrder?: number }) {
+  const session = await auth()
+  assertPermission(session, PERMISSION_IDS.PRODUCTS_MANAGE)
+
+  const name = data.name.trim()
+  if (!name) throw new Error("El nombre de la categoria es obligatorio")
+
+  try {
+    await sql(
+      `INSERT INTO categories (name, display_order)
+       VALUES ($1, $2)
+       ON CONFLICT (name) DO NOTHING`,
+      [name, data.displayOrder ?? 0]
+    )
+
+    revalidatePath("/admin/products")
+    revalidatePath("/pos")
+    return { success: true }
+  } catch (error) {
+    console.error("Error creating category:", error)
+    throw new Error("No se pudo crear la categoria")
+  }
+}
+
+export async function updateCategory(categoryId: number, data: { name: string; displayOrder?: number }) {
+  const session = await auth()
+  assertPermission(session, PERMISSION_IDS.PRODUCTS_MANAGE)
+
+  const name = data.name.trim()
+  if (!name) throw new Error("El nombre de la categoria es obligatorio")
+
+  try {
+    await sql(
+      `UPDATE categories
+       SET name = $1, display_order = $2
+       WHERE id = $3`,
+      [name, data.displayOrder ?? 0, categoryId]
+    )
+
+    revalidatePath("/admin/products")
+    revalidatePath("/pos")
+    return { success: true }
+  } catch (error) {
+    console.error("Error updating category:", error)
+    throw new Error("No se pudo actualizar la categoria")
+  }
+}
+
+export async function deleteCategory(categoryId: number) {
+  const session = await auth()
+  assertPermission(session, PERMISSION_IDS.PRODUCTS_MANAGE)
+
+  try {
+    // Unlink products from this category
+    await sql(`UPDATE products SET category_id = NULL WHERE category_id = $1`, [categoryId])
+    // Delete category
+    await sql(`DELETE FROM categories WHERE id = $1`, [categoryId])
+
+    revalidatePath("/admin/products")
+    revalidatePath("/pos")
+    return { success: true }
+  } catch (error) {
+    console.error("Error deleting category:", error)
+    throw new Error("No se pudo eliminar la categoria")
   }
 }
 

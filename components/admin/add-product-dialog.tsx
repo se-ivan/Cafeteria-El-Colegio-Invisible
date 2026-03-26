@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label"
 import { Spinner } from "@/components/ui/spinner"
 import { createProduct } from "@/lib/actions"
 import { Plus, Utensils, DollarSign, Coffee, Snowflake, Croissant, CakeSlice, UtensilsCrossed, PackageOpen, CupSoda } from "lucide-react"
+import { Tag } from "lucide-react"
 import type { Category } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
@@ -43,6 +44,30 @@ export function AddProductDialog({ categories }: AddProductDialogProps) {
     price: "",
     categoryId: "",
   })
+  const [selectedIcon, setSelectedIcon] = useState<string | null>(null)
+  const [selectedColor, setSelectedColor] = useState<string | null>(null)
+
+  const ICON_OPTIONS: { id: string; Icon: any }[] = [
+    { id: "coffee", Icon: Coffee },
+    { id: "snowflake", Icon: Snowflake },
+    { id: "croissant", Icon: Croissant },
+    { id: "utensils", Icon: Utensils },
+    { id: "package", Icon: PackageOpen },
+    { id: "cake", Icon: CakeSlice },
+    { id: "cup", Icon: CupSoda },
+    { id: "tag", Icon: Tag },
+  ]
+
+  const COLOR_OPTIONS = [
+    "#F59E0B",
+    "#F97316",
+    "#60A5FA",
+    "#34D399",
+    "#A78BFA",
+    "#F472B6",
+    "#F87171",
+    "#94A3B8",
+  ]
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -53,9 +78,13 @@ export function AddProductDialog({ categories }: AddProductDialogProps) {
         name: formData.name,
         price: parseFloat(formData.price),
         categoryId: parseInt(formData.categoryId, 10),
+        icon: selectedIcon,
+        color: selectedColor,
       })
       setOpen(false)
       setFormData({ name: "", price: "", categoryId: "" })
+      setSelectedIcon(null)
+      setSelectedColor(null)
     } catch (error) {
       console.error("Error creating product:", error)
     } finally {
@@ -121,6 +150,43 @@ export function AddProductDialog({ categories }: AddProductDialogProps) {
                   })}
                 </div>
               )}
+            </div>
+
+            {/* Icon & Color */}
+            <div className="space-y-3">
+              <Label className="text-sm font-semibold text-slate-700">Icono</Label>
+              <div className="grid grid-cols-8 gap-2">
+                {ICON_OPTIONS.map((opt) => {
+                  const Icon = opt.Icon
+                  const isSelected = selectedIcon === opt.id
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => setSelectedIcon(isSelected ? null : opt.id)}
+                      className={cn(
+                        "p-2 rounded-lg border-2 transition-all",
+                        isSelected ? "border-blue-300 bg-blue-50" : "border-slate-100 bg-white"
+                      )}
+                    >
+                      <Icon className={cn("h-5 w-5 mx-auto", isSelected ? "text-blue-600" : "text-slate-400")} />
+                    </button>
+                  )
+                })}
+              </div>
+
+              <Label className="text-sm font-semibold text-slate-700">Color</Label>
+              <div className="flex items-center gap-2">
+                {COLOR_OPTIONS.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => setSelectedColor(selectedColor === c ? null : c)}
+                    className={cn("w-8 h-8 rounded-full border-2", selectedColor === c ? "border-slate-300 scale-[1.04]" : "border-white")}
+                    style={{ backgroundColor: c }}
+                  />
+                ))}
+              </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">

@@ -51,6 +51,8 @@ export interface Product {
   category_id: number
   is_active: boolean
   image_url: string | null
+  icon?: string | null
+  color?: string | null
   created_at: Date
   updated_at: Date
   category?: Category
