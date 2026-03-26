@@ -133,6 +133,33 @@ async function ensureCashSessionTables() {
 // Categories
 export async function getCategories(): Promise<Category[]> {
   const categories = await sql("SELECT * FROM categories ORDER BY display_order ASC") as Category[]
+  if (!categories || categories.length === 0) {
+    const defaults = [
+      { name: "BEBIDAS", display_order: 0 },
+      { name: "ALIMENTOS", display_order: 1 },
+      { name: "SNACKS", display_order: 2 },
+      { name: "POSTRES", display_order: 3 },
+      { name: "OTROS", display_order: 4 },
+    ]
+
+    for (const d of defaults) {
+      try {
+        await sql(
+          `INSERT INTO categories (name, display_order)
+           VALUES ($1, $2)
+           ON CONFLICT (name) DO NOTHING`,
+          [d.name, d.display_order]
+        )
+      } catch (err) {
+        // ignore insertion errors and continue
+        console.error("Error inserting default category", d.name, err)
+      }
+    }
+
+    const reloaded = await sql("SELECT * FROM categories ORDER BY display_order ASC") as Category[]
+    return reloaded
+  }
+
   return categories
 }
 
